@@ -1,158 +1,221 @@
-// Admission view — Application form + printable output
-import { el, ICON, SCHOOL, fmtDate, ageFromDob, initials } from "../utils.js";
-import { setCrumbs, openModal, toast, loadingState } from "../ui.js";
-import { openStudentForm, studentFormFields, validateStudent } from "./students.js";
-import { createStudent, getStudent } from "../data.js";
+// Receipts view + shared receipt renderer (Fee / Salary)
+import { el, ICON, SCHOOL, fmtCurrency, fmtDate } from "../utils.js";
+import { setCrumbs, openModal, loadingState, DataTable } from "../ui.js";
+import { subscribeFees, subscribeSalaries } from "../data.js";
 import { printNode } from "../pdf.js";
 
-export function AdmissionView() {
-  setCrumbs([{ label: "Admission" }]);
-  const page = el("div", { "data-testid": "admission-view" });
-  const hashQuery = location.hash.split("?")[1] || "";
-  const params = new URLSearchParams(hashQuery);
-  const preselectId = params.get("id");
-
+export function ReceiptsView() {
+  setCrumbs([{ label: "Receipts" }]);
+  const page = el("div", { "data-testid": "receipts-view" });
   page.appendChild(el("div", { class: "page-header" }, [
     el("div", {}, [
-      el("h1", { class: "page-title", text: "Student Admission" }),
-      el("p", { class: "page-subtitle", text: "Fill the admission form. IDs are auto-generated on submit." })
+      el("h1", { class: "page-title", text: "Receipts" }),
+      el("p", { class: "page-subtitle", text: "Browse fee and salary receipts. Print any receipt directly." })
     ])
   ]));
 
-  const preview = el("div", { "data-testid": "admission-preview" });
+  const tabs = el("div", { style: "display:flex;gap:6px;margin-bottom:16px;" });
+  const feeTab = tabBtn("Fee Receipts", true);
+  const salTab = tabBtn("Salary Receipts", false);
+  tabs.appendChild(feeTab); tabs.appendChild(salTab);
+  page.appendChild(tabs);
 
-  if (preselectId) {
-    preview.appendChild(loadingState("Loading admission form…"));
-    getStudent(preselectId).then(r => {
-      preview.innerHTML = "";
-      if (r) preview.appendChild(admissionFormRender(r));
-      else preview.appendChild(el("div", { class: "state", text: "Student not found" }));
+  const feeMount = el("div"); const salMount = el("div", { style: "display:none;" });
+  page.appendChild(feeMount); page.appendChild(salMount);
+  feeMount.appendChild(loadingState("Loading fee receipts…"));
+  salMount.appendChild(loadingState("Loading salary receipts…"));
+
+  feeTab.onclick = () => { setActive(feeTab, salTab); feeMount.style.display = ""; salMount.style.display = "none"; };
+  salTab.onclick = () => { setActive(salTab, feeTab); salMount.style.display = ""; feeMount.style.display = "none"; };
+
+  const unsub1 = subscribeFees(list => {
+    feeMount.innerHTML = "";
+    const table = DataTable({
+      testId: "fee-receipts-table",
+      columns: [
+        { key: "receiptNumber", label: "Receipt #", sortable: true },
+        { key: "studentName", label: "Student", sortable: true },
+        { key: "class", label: "Class", render: r => `${r.class || "—"} ${r.section ? "· " + r.section : ""}` },
+        { key: "feeType", label: "Fee Type" },
+        { key: "amount", label: "Amount", render: r => fmtCurrency(r.amount) },
+        { key: "date", label: "Date", sortable: true, render: r => fmtDate(r.date) },
+        { key: "_", label: "", render: r => actions([
+          { icon: ICON.receipt, onClick: () => openFeeReceipt(r), label: "View", testId: `rc-view-${r.id}` }
+        ]) }
+      ],
+      rows: list,
+      searchFields: ["studentName", "receiptNumber", "feeType"],
+      emptyTitle: "No fee receipts",
+      emptySub: "Collect a fee payment to generate a receipt."
     });
-    page.appendChild(preview);
-    return page;
-  }
-
-  const formCard = el("div", { class: "card" }, [
-    el("div", { class: "card-header" }, [
-      el("div", {}, [
-        el("div", { class: "card-title", text: "New Admission Form" }),
-        el("div", { class: "card-subtitle", text: "Admission ID and Admission Number are automatically generated on submit." })
-      ])
-    ])
-  ]);
-  const formBody = el("div", { class: "card-body" });
-  const fields = studentFormFields({});
-  formBody.appendChild(fields.node);
-  const actions = el("div", { class: "form-actions" }, [
-    el("button", { class: "btn btn-outline", text: "Reset", onclick: () => location.reload() }),
-    el("button", { class: "btn btn-primary", "data-testid": "submit-admission-btn", html: `${ICON.check}<span>Submit Admission</span>` })
-  ]);
-  formBody.appendChild(actions);
-  formCard.appendChild(formBody);
-  page.appendChild(formCard);
-  page.appendChild(preview);
-
-  const submitBtn = actions.querySelector("[data-testid=submit-admission-btn]");
-  submitBtn.addEventListener("click", async () => {
-    const data = fields.getValue();
-    const err = validateStudent(data);
-    if (err) { toast({ type: "error", title: "Validation error", message: err }); return; }
-    submitBtn.disabled = true; submitBtn.textContent = "Submitting…";
-    try {
-      const created = await createStudent(data, fields.getPhoto());
-      toast({ type: "success", title: "Admission successful", message: `Admission #${created.admissionNumber}` });
-      preview.innerHTML = "";
-      preview.appendChild(admissionFormRender(created));
-      preview.scrollIntoView({ behavior: "smooth", block: "start" });
-      formCard.style.display = "none";
-    } catch (e) {
-      console.error(e);
-      toast({ type: "error", title: "Submission failed", message: e.message || "Please try again." });
-      submitBtn.disabled = false; submitBtn.textContent = "Submit Admission";
-    }
+    feeMount.appendChild(table.node);
+  });
+  const unsub2 = subscribeSalaries(list => {
+    salMount.innerHTML = "";
+    const table = DataTable({
+      testId: "sal-receipts-table",
+      columns: [
+        { key: "receiptNumber", label: "Receipt #", sortable: true },
+        { key: "teacherName", label: "Teacher", sortable: true },
+        { key: "designation", label: "Designation" },
+        { key: "month", label: "Month", render: r => `${r.month || "—"} ${r.year || ""}` },
+        { key: "amount", label: "Amount", render: r => fmtCurrency(r.amount) },
+        { key: "date", label: "Date", sortable: true, render: r => fmtDate(r.date) },
+        { key: "_", label: "", render: r => actions([
+          { icon: ICON.receipt, onClick: () => openSalaryReceipt(r), label: "View", testId: `sr-view-${r.id}` }
+        ]) }
+      ],
+      rows: list,
+      searchFields: ["teacherName", "receiptNumber", "designation"],
+      emptyTitle: "No salary receipts",
+      emptySub: "Generate salary payments to see receipts here."
+    });
+    salMount.appendChild(table.node);
   });
 
+  page.addEventListener("view:unmount", () => { unsub1 && unsub1(); unsub2 && unsub2(); });
   return page;
 }
 
-function admissionFormRender(r) {
-  const wrap = el("div");
+function tabBtn(label, active) {
+  return el("button", { class: `btn ${active ? "btn-primary" : "btn-outline"}`, text: label });
+}
+function setActive(on, off) {
+  on.className = "btn btn-primary"; off.className = "btn btn-outline";
+}
+function actions(items) {
+  const wrap = el("div", { class: "row-actions" });
+  items.forEach(it => {
+    const b = el("button", { class: "icon-btn-sm", title: it.label, "data-testid": it.testId, html: it.icon });
+    b.onclick = it.onClick; wrap.appendChild(b);
+  });
+  return wrap;
+}
 
-  // Actions: Print only (no download PDF)
-  const actions = el("div", { class: "page-actions", style: "justify-content:flex-end;margin-bottom:12px;" }, [
-    el("button", { class: "btn btn-outline", html: `${ICON.print}<span>Print</span>`, onclick: () => printNode(printable) })
-  ]);
-  wrap.appendChild(actions);
+// ---------- Receipt renderers ----------
+export function openFeeReceipt(r) {
+  const node = renderReceipt({
+    kind: "Fee Receipt",
+    number: r.receiptNumber,
+    date: r.date,
+    parties: [
+      ["Student", r.studentName], ["Admission #", r.admissionNumber],
+      ["Class", r.class ? `${r.class}${r.section ? " · " + r.section : ""}` : "—"],
+      ["Payment Mode", r.paymentMode]
+    ],
+    lines: [
+      { desc: `${r.feeType || "Fee"} ${r.month ? `(${r.month})` : ""}`, amount: Number(r.amount) || 0 }
+    ],
+    totalDue: Number(r.amount) || 0,
+    paid: Number(r.paidAmount ?? r.amount) || 0,
+    balance: Number(r.balance) || 0,
+    remarks: r.remarks
+  });
+  openReceiptModal("Fee Receipt", node);
+}
 
-  // Printable receipt with horizontal scroll wrapper for modal preview
+export function openSalaryReceipt(r) {
+  const gross = Number(r.baseSalary || r.amount) || 0;
+  const ded = Number(r.deductions) || 0, bon = Number(r.bonus) || 0;
+  const net = Number(r.amount) || (gross - ded + bon);
+  const node = renderReceipt({
+    kind: "Salary Slip",
+    number: r.receiptNumber,
+    date: r.date,
+    parties: [
+      ["Teacher", r.teacherName], ["Teacher ID", r.teacherIdShort],
+      ["Designation", r.designation], ["Payment Mode", r.paymentMode],
+      ["Month", `${r.month || ""} ${r.year || ""}`], ["Status", r.status]
+    ],
+    lines: [
+      { desc: "Base Salary", amount: gross },
+      ded > 0 ? { desc: "Deductions", amount: -ded } : null,
+      bon > 0 ? { desc: "Bonus / Allowance", amount: bon } : null
+    ].filter(Boolean),
+    totalDue: net,
+    paid: r.status === "Paid" ? net : 0,
+    balance: r.status === "Paid" ? 0 : net,
+    remarks: ""
+  });
+  openReceiptModal("Salary Slip", node);
+}
+
+// ---------- Modal with horizontal scroll and Print only ----------
+function openReceiptModal(title, node) {
   const scrollWrapper = el("div", {
-    style: "overflow-x: auto; width: 100%; padding: 4px 0;"
+    style: "overflow-x: auto; width: 100%; padding: 8px 0;"
+  });
+  scrollWrapper.appendChild(node);
+
+  const printBtn = el("button", {
+    class: "btn btn-outline",
+    html: `${ICON.print}<span>Print</span>`
+  });
+  const closeBtn = el("button", { class: "btn btn-ghost", text: "Close" });
+
+  const m = openModal({
+    title,
+    body: scrollWrapper,
+    footer: [closeBtn, printBtn],
+    size: "large"
   });
 
-  const printable = el("div", { class: "receipt print-area", id: "admission-print", "data-testid": "admission-print", style: "max-width: 100%;" });
-  printable.appendChild(el("div", { class: "receipt-head" }, [
+  closeBtn.onclick = () => m.close();
+  printBtn.onclick = () => printNode(node);
+}
+
+// ---------- Receipt HTML renderer (with forced 2‑column grid) ----------
+function renderReceipt({ kind, number, date, parties, lines, totalDue, paid, balance, remarks }) {
+  const wrap = el("div", { class: "receipt print-area", "data-testid": "receipt", style: "max-width: 100%;" });
+  wrap.appendChild(el("div", { class: "receipt-head" }, [
     el("div", { class: "receipt-brand" }, [
-      el("div", { class: "logo" }, [el("span", { html: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>` })]),
+      el("div", { class: "logo", html: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>` }),
       el("div", {}, [
         el("div", { class: "school-name", text: SCHOOL.name }),
-        el("div", { class: "school-meta", text: `${SCHOOL.address}` }),
+        el("div", { class: "school-meta", text: SCHOOL.address }),
         el("div", { class: "school-meta", text: `${SCHOOL.phone} · ${SCHOOL.email} · ${SCHOOL.website}` })
       ])
     ]),
     el("div", { class: "receipt-tag" }, [
-      el("h3", { text: "Admission Form" }),
-      el("div", { class: "r-num", text: `Adm ID: ${r.admissionId}` }),
-      el("div", { class: "r-num", text: `Adm #: ${r.admissionNumber}` }),
-      el("div", { class: "r-num", text: `Date: ${fmtDate(r.admissionDate || r.createdAt)}` })
+      el("h3", { text: kind }),
+      el("div", { class: "r-num", text: `Receipt #: ${number}` }),
+      el("div", { class: "r-num", text: `Date: ${fmtDate(date)}` })
     ])
   ]));
 
-  const kv = (k, v) => el("div", {}, [el("span", { class: "k", text: k }), el("span", { class: "v", text: v || "—" })]);
+  // --- FORCE 2‑COLUMN GRID CONSISTENTLY ---
+  const gridStyle = "display: grid; grid-template-columns: repeat(2, 1fr) !important; gap: 8px 24px; font-size: 13px;";
 
-  const photoBox = el("div", { style: "display:flex;gap:20px;align-items:flex-start;margin-bottom:18px;" }, [
-    (() => { const a = el("div", { class: "avatar lg" }); if (r.photoUrl) a.appendChild(el("img", { src: r.photoUrl })); else a.textContent = initials(r.name); return a; })(),
-    el("div", { style: "flex:1" }, [
-      el("div", { style: "font-size:18px;font-weight:800;letter-spacing:-0.02em;", text: r.name }),
-      el("div", { style: "color:var(--muted);font-size:13px;margin-top:4px;", text: `${r.class || "—"} · Section ${r.section || "—"} · Roll ${r.rollNumber || "—"}` })
-    ])
-  ]);
-  printable.appendChild(photoBox);
-
-  printable.appendChild(el("div", { class: "receipt-section" }, [
-    el("h4", { text: "Personal Information" }),
-    el("div", { class: "receipt-info-grid" }, [
-      kv("Full Name", r.name), kv("Gender", r.gender),
-      kv("DOB", fmtDate(r.dob)), kv("Age", ageFromDob(r.dob)),
-      kv("Blood Group", r.bloodGroup), kv("Religion", r.religion),
-      kv("Category", r.category), kv("Previous School", r.previousSchool)
-    ])
-  ]));
-  printable.appendChild(el("div", { class: "receipt-section" }, [
-    el("h4", { text: "Academic Details" }),
-    el("div", { class: "receipt-info-grid" }, [
-      kv("Class", r.class), kv("Section", r.section),
-      kv("Roll Number", r.rollNumber), kv("Admission Date", fmtDate(r.admissionDate))
-    ])
-  ]));
-  printable.appendChild(el("div", { class: "receipt-section" }, [
-    el("h4", { text: "Parents & Contact" }),
-    el("div", { class: "receipt-info-grid" }, [
-      kv("Father's Name", r.fatherName), kv("Mother's Name", r.motherName),
-      kv("Guardian", r.guardian), kv("Phone", r.phone),
-      kv("Emergency", r.emergencyContact), kv("Email", r.email)
-    ])
-  ]));
-  printable.appendChild(el("div", { class: "receipt-section" }, [
-    el("h4", { text: "Address" }),
-    el("div", { style: "font-size:13px;color:var(--text);", text: r.address || "—" })
+  wrap.appendChild(el("div", { class: "receipt-section" }, [
+    el("h4", { text: "Details" }),
+    el("div", { class: "receipt-info-grid", style: gridStyle }, parties.map(([k, v]) => el("div", {}, [
+      el("span", { class: "k", text: k }), el("span", { class: "v", text: v || "—" })
+    ])))
   ]));
 
-  printable.appendChild(el("div", { class: "receipt-foot" }, [
-    el("div", { class: "note", text: "This is a system-generated admission application. Please retain this copy for your records." }),
+  const table = el("table", { class: "receipt-table" });
+  table.innerHTML = `<thead><tr><th>Description</th><th style="text-align:right;">Amount</th></tr></thead>`;
+  const tbody = el("tbody");
+  lines.forEach(l => {
+    tbody.appendChild(el("tr", {}, [
+      el("td", { text: l.desc }),
+      el("td", { style: "text-align:right;", text: fmtCurrency(l.amount) })
+    ]));
+  });
+  tbody.appendChild(el("tr", { class: "total-row" }, [el("td", { text: "Total" }), el("td", { style: "text-align:right;", text: fmtCurrency(totalDue) })]));
+  tbody.appendChild(el("tr", {}, [el("td", { text: "Amount Paid" }), el("td", { style: "text-align:right;", text: fmtCurrency(paid) })]));
+  tbody.appendChild(el("tr", {}, [el("td", { text: "Balance Due" }), el("td", { style: `text-align:right;color:${balance > 0 ? "var(--danger)" : "var(--muted)"};font-weight:600;`, text: fmtCurrency(balance) })]));
+  table.appendChild(tbody);
+  wrap.appendChild(table);
+
+  if (remarks) wrap.appendChild(el("div", { class: "receipt-section", style: "margin-top:12px;" }, [
+    el("h4", { text: "Remarks" }),
+    el("div", { style: "font-size:13px;color:var(--text);", text: remarks })
+  ]));
+
+  wrap.appendChild(el("div", { class: "receipt-foot" }, [
+    el("div", { class: "note", text: "This is a computer-generated receipt. No signature required. For queries, contact the office." }),
     el("div", { class: "sign" }, [el("div", { class: "line" }), el("div", { text: "Authorized Signatory" })])
   ]));
-
-  scrollWrapper.appendChild(printable);
-  wrap.appendChild(scrollWrapper);
   return wrap;
 }
