@@ -1,4 +1,4 @@
-// Firebase initialization using Realtime Database (the project's provisioned DB)
+// Firebase initialization using Realtime Database
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
   getDatabase, ref as dbRef, push, set, update, remove, get, child,
@@ -23,7 +23,6 @@ export const app = initializeApp(firebaseConfig);
 export const db = getDatabase(app);
 export const storage = getStorage(app);
 
-// Re-export database and storage functions for convenience
 export {
   dbRef,
   push,
@@ -43,7 +42,6 @@ export {
   deleteObject
 };
 
-// Namespaced paths – avoids collisions if the DB is shared
 const NS = "erp_bfa";
 export const PATH = {
   students: `${NS}/students`,
@@ -53,7 +51,6 @@ export const PATH = {
   counters: `${NS}/counters`
 };
 
-// Atomic counter using RTDB transactions
 export async function nextCounter(name, prefix, pad = 4) {
   const cRef = dbRef(db, `${PATH.counters}/${name}`);
   const result = await runTransaction(cRef, (current) => (Number(current) || 0) + 1);
@@ -61,8 +58,6 @@ export async function nextCounter(name, prefix, pad = 4) {
   return `${prefix}${String(value).padStart(pad, "0")}`;
 }
 
-// Upload a photo file to Firebase Storage; returns download URL.
-// Falls back to base64 if upload fails.
 export async function uploadPhoto(kind, id, file) {
   if (!file) return null;
   try {
@@ -85,7 +80,6 @@ function fileToDataUrl(file) {
   });
 }
 
-// Health probe – checks if the database is reachable
 export async function firebaseHealthCheck() {
   try {
     await get(dbRef(db, `${NS}/_meta`));
