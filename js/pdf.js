@@ -1,16 +1,18 @@
-// PDF utilities — uses jsPDF + html2canvas loaded via CDN in index.html
+// PDF utilities — generates a true digital PDF with selectable text
+// Uses image capture for visual fidelity + invisible text overlay for selectability
+
 export async function elementToPdf(node, filename = "document.pdf") {
   if (!window.html2canvas || !window.jspdf) {
     alert("PDF library still loading, please try again.");
     return;
   }
 
-  // Ensure the node is in the DOM and visible
+  // Ensure the node is in the DOM for accurate measurement
   if (!node.isConnected) {
     document.body.appendChild(node);
   }
 
-  // Capture the node with high quality
+  // 1. Capture the receipt as a high-resolution image
   const canvas = await window.html2canvas(node, {
     scale: 2,
     backgroundColor: "#ffffff",
@@ -22,10 +24,11 @@ export async function elementToPdf(node, filename = "document.pdf") {
     windowHeight: node.scrollHeight
   });
 
-  const imgData = canvas.toDataURL("image/png");
-  const { jsPDF } = window.jspdf;
+  // 2. Extract all text nodes with their bounding rectangles
+  const textNodes = getTextNodes(node);
 
-  // A4 dimensions in mm
+  // 3. Prepare jsPDF with A4 and margins
+  const { jsPDF } = window.jspdf;
   const pdf = new jsPDF({
     orientation: "portrait",
     unit: "mm",
@@ -34,109 +37,114 @@ export async function elementToPdf(node, filename = "document.pdf") {
 
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-
-  // Margins: 15mm each side
   const margin = 15;
   const maxWidth = pageWidth - margin * 2;
   const maxHeight = pageHeight - margin * 2;
 
-  // Calculate image dimensions to fit within margins
+  // 4. Calculate scale to fit the receipt within the page width
   const imgWidth = canvas.width;
   const imgHeight = canvas.height;
-  const ratio = imgWidth / imgHeight;
+  const scale = maxWidth / imgWidth;
+  const scaledHeight = imgHeight * scale;
 
-  let finalWidth = maxWidth;
-  let finalHeight = finalWidth / ratio;
+  // 5. If the receipt fits in one page, add it; else split across pages
+  const totalHeight = scaledHeight;
+  const pageContentHeight = maxHeight;
+  const numPages = Math.max(1, Math.ceil(totalHeight / pageContentHeight));
 
-  // If the image is too tall, fit height and adjust width
-  if (finalHeight > maxHeight) {
-    finalHeight = maxHeight;
-    finalWidth = finalHeight * ratio;
-  }
-
-  // Center the image horizontally (optional)
-  const xOffset = (pageWidth - finalWidth) / 2;
-  const yOffset = margin;
-
-  // Add first page
-  pdf.addImage(imgData, "PNG", xOffset, yOffset, finalWidth, finalHeight);
-
-  // If content exceeds one page, split into multiple pages
-  const totalHeight = imgHeight * (finalWidth / imgWidth); // actual height in mm
-  let remainingHeight = totalHeight - (maxHeight);
-
-  let currentY = yOffset + finalHeight; // after first page
-
-  // We need to crop the canvas vertically for subsequent pages
-  // Simplest: we add the same image but with negative y position
-  // using jsPDF's addImage with y negative? Actually we need to create a new canvas for each page
-  // Instead, we'll use a loop with a virtual crop.
-
-  // Alternative: re-capture the node with a scroll offset – not ideal.
-  // Better: use html2canvas to capture whole node, then split the image.
-
-  // We'll use a different approach: if the image is too tall, we'll scale it to fit one page.
-  // But the user likely wants all content, so we'll scale to fit width and if height > pageHeight, we'll split.
-
-  // Since we already scaled to fit within maxWidth and maxHeight, if the image is still taller than maxHeight,
-  // we need to split. However, we already set finalHeight to fit within maxHeight if it was too tall.
-  // That means we are scaling the entire image to fit one page. This may make text small.
-
-  // To keep text readable, we should not scale down to fit one page if content is large.
-  // Better: keep the image at original resolution and scroll/crop.
-
-  // Let's use a simpler approach: if the image height is too large, we'll scale to fit width (maxWidth)
-  // and then split into multiple pages using the same image but with y offset.
-
-  // Redo the logic:
-
-  // Recalculate without fitting to page height initially.
-  const scaledWidth = maxWidth;
-  const scaledHeight = scaledWidth / ratio;
-
-  // Now, if scaledHeight > maxHeight, we need multiple pages.
-  // We'll add the image in chunks.
-
-  // We'll use the original canvas and crop it page by page.
-  // But html2canvas gives us a full canvas, we can use drawImage with source cropping.
-
-  // However, jsPDF's addImage accepts image data, not canvas.
-  // We can create a temporary canvas for each page and draw the source crop.
-
-  // Let's do that.
-
-  const srcCanvas = canvas;
-  const srcWidth = srcCanvas.width;
-  const srcHeight = srcCanvas.height;
-
-  const pagePixelsHeight = srcHeight * (maxHeight / scaledHeight);
-
-  let offsetY = 0;
-  let pageCount = 0;
-
-  while (offsetY < srcHeight) {
-    if (pageCount > 0) {
+  for (let pageIndex = 0; pageIndex < numPages; pageIndex++) {
+    if (pageIndex > 0) {
       pdf.addPage();
     }
 
-    const cropHeight = Math.min(pagePixelsHeight, srcHeight - offsetY);
-    const tempCanvas = document.createElement("canvas");
-    tempCanvas.width = srcWidth;
-    tempCanvas.height = cropHeight;
-    const ctx = tempCanvas.getContext("2d");
-    ctx.drawImage(srcCanvas, 0, offsetY, srcWidth, cropHeight, 0, 0, srcWidth, cropHeight);
+    // Calculate the vertical offset for cropping (in image pixels)
+    const offsetY = pageIndex * (pageContentHeight / scale);
+    const cropHeight = Math.min(imgHeight - offsetY, pageContentHeight / scale);
 
-    const imgDataPage = tempCanvas.toDataURL("image/png");
+    // Create a cropped canvas for this page
+    const pageCanvas = document.createElement("canvas");
+    pageCanvas.width = imgWidth;
+    pageCanvas.height = cropHeight;
+    const ctx = pageCanvas.getContext("2d");
+    ctx.drawImage(canvas, 0, offsetY, imgWidth, cropHeight, 0, 0, imgWidth, cropHeight);
+
+    // Add the cropped image to the PDF
+    const imgData = pageCanvas.toDataURL("image/png");
     const pageImgWidth = maxWidth;
-    const pageImgHeight = (cropHeight / srcWidth) * maxWidth;
+    const pageImgHeight = (cropHeight / imgWidth) * maxWidth;
+    pdf.addImage(imgData, "PNG", margin, margin, pageImgWidth, pageImgHeight);
 
-    pdf.addImage(imgDataPage, "PNG", xOffset, yOffset, pageImgWidth, pageImgHeight);
+    // Add invisible text overlay for this page
+    const pageStartY = offsetY;
+    const pageEndY = offsetY + cropHeight;
 
-    offsetY += cropHeight;
-    pageCount++;
+    // Filter text nodes that fall within this page's vertical range
+    const pageTextNodes = textNodes.filter(tn => {
+      const rect = tn.rect;
+      const centerY = rect.top + rect.height / 2;
+      return centerY >= pageStartY && centerY <= pageEndY;
+    });
+
+    // Set text rendering mode to invisible (mode 3)
+    pdf.setTextRenderingMode(3);
+    pdf.setFont("helvetica", "normal");
+
+    for (const tn of pageTextNodes) {
+      const rect = tn.rect;
+      // Calculate position relative to the page (in mm)
+      const x = margin + (rect.left / imgWidth) * maxWidth;
+      const y = margin + ((rect.top - offsetY) / imgWidth) * maxWidth + (rect.height / imgWidth) * maxWidth;
+      // Determine font size (approximate from height)
+      const fontSize = (rect.height / imgWidth) * maxWidth * 0.7; // adjust factor
+      pdf.setFontSize(Math.max(fontSize, 6)); // min 6pt
+      pdf.text(tn.text, x, y);
+    }
   }
 
+  // 6. Save the PDF
   pdf.save(filename);
+}
+
+/**
+ * Recursively extract all text nodes with their bounding rectangles
+ * relative to the container node.
+ */
+function getTextNodes(container) {
+  const result = [];
+  const walker = document.createTreeWalker(
+    container,
+    NodeFilter.SHOW_TEXT,
+    {
+      acceptNode: function(node) {
+        const text = node.textContent.trim();
+        if (text.length === 0) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
+      }
+    }
+  );
+
+  const containerRect = container.getBoundingClientRect();
+
+  let node;
+  while ((node = walker.nextNode())) {
+    const range = document.createRange();
+    range.selectNode(node);
+    const rects = range.getClientRects();
+    for (let rect of rects) {
+      // Convert to coordinates relative to container
+      const relative = {
+        left: rect.left - containerRect.left,
+        top: rect.top - containerRect.top,
+        width: rect.width,
+        height: rect.height
+      };
+      result.push({
+        text: node.textContent.trim(),
+        rect: relative
+      });
+    }
+  }
+  return result;
 }
 
 export function printNode(node) {
