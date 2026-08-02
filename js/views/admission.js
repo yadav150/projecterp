@@ -3,7 +3,7 @@ import { el, ICON, SCHOOL, fmtDate, ageFromDob, initials } from "../utils.js";
 import { setCrumbs, openModal, toast, loadingState } from "../ui.js";
 import { openStudentForm, studentFormFields, validateStudent } from "./students.js";
 import { createStudent, getStudent } from "../data.js";
-import { elementToPdf, printNode } from "../pdf.js";
+import { printNode } from "../pdf.js";
 
 export function AdmissionView() {
   setCrumbs([{ label: "Admission" }]);
@@ -77,13 +77,19 @@ export function AdmissionView() {
 
 function admissionFormRender(r) {
   const wrap = el("div");
+
+  // Actions: Print only (no download PDF)
   const actions = el("div", { class: "page-actions", style: "justify-content:flex-end;margin-bottom:12px;" }, [
-    el("button", { class: "btn btn-outline", html: `${ICON.print}<span>Print</span>`, onclick: () => printNode(printable) }),
-    el("button", { class: "btn btn-primary", "data-testid": "download-admission-pdf", html: `${ICON.download}<span>Download PDF</span>`, onclick: () => elementToPdf(printable, `Admission_${r.admissionNumber}.pdf`) })
+    el("button", { class: "btn btn-outline", html: `${ICON.print}<span>Print</span>`, onclick: () => printNode(printable) })
   ]);
   wrap.appendChild(actions);
 
-  const printable = el("div", { class: "receipt print-area", id: "admission-print", "data-testid": "admission-print" });
+  // Printable receipt with horizontal scroll wrapper for modal preview
+  const scrollWrapper = el("div", {
+    style: "overflow-x: auto; width: 100%; padding: 4px 0;"
+  });
+
+  const printable = el("div", { class: "receipt print-area", id: "admission-print", "data-testid": "admission-print", style: "max-width: 100%;" });
   printable.appendChild(el("div", { class: "receipt-head" }, [
     el("div", { class: "receipt-brand" }, [
       el("div", { class: "logo" }, [el("span", { html: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>` })]),
@@ -146,6 +152,7 @@ function admissionFormRender(r) {
     el("div", { class: "sign" }, [el("div", { class: "line" }), el("div", { text: "Authorized Signatory" })])
   ]));
 
-  wrap.appendChild(printable);
+  scrollWrapper.appendChild(printable);
+  wrap.appendChild(scrollWrapper);
   return wrap;
 }
