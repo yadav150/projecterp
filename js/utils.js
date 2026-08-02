@@ -106,12 +106,12 @@ export const PAY_MODES = ["Cash", "UPI", "Bank Transfer", "Cheque", "Card"];
 export const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 export const SCHOOL = {
-  name: "Bright Future Academy",
-  tagline: "Nurturing minds since 1998",
-  address: "12, Rose Avenue, Sector 21, Noida, Uttar Pradesh — 201301",
-  phone: "+91 98765 43210",
-  email: "info@brightfuture.edu",
-  website: "www.brightfuture.edu"
+  name: "Morning Glory English Academy",
+  tagline: "Shaping Futures Since 2010",
+  address: "Dikhlem, West Karbi Anglong, Assam — 782448",
+  phone: "+91 78965 79939",
+  email: "info@morninggloryacademy.edu.in",
+  website: "www.morninggloryacademy.edu.in"
 };
 
 // Simple SVG loader for reuse
