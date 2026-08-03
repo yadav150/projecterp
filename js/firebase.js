@@ -8,6 +8,9 @@ import {
   getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-storage.js";
 
+// --------------------------------------------------------------
+// Firebase Configuration – Morning Glory Academy ERP
+// --------------------------------------------------------------
 const firebaseConfig = {
   apiKey: "AIzaSyBCdSPOM47RDoQpH2uIOlGpphS6RAiyWao",
   authDomain: "skill2jobvisitcount.firebaseapp.com",
@@ -23,6 +26,9 @@ export const app = initializeApp(firebaseConfig);
 export const db = getDatabase(app);
 export const storage = getStorage(app);
 
+// --------------------------------------------------------------
+// Re‑export database and storage functions for convenience
+// --------------------------------------------------------------
 export {
   dbRef,
   push,
@@ -42,6 +48,9 @@ export {
   deleteObject
 };
 
+// --------------------------------------------------------------
+// Namespaced paths – avoids collisions if the DB is shared
+// --------------------------------------------------------------
 const NS = "erp_bfa";
 export const PATH = {
   students: `${NS}/students`,
@@ -51,6 +60,10 @@ export const PATH = {
   counters: `${NS}/counters`
 };
 
+// --------------------------------------------------------------
+// Atomic counter using RTDB transactions
+// Used by data.js for auto‑generating IDs
+// --------------------------------------------------------------
 export async function nextCounter(name, prefix, pad = 4) {
   const cRef = dbRef(db, `${PATH.counters}/${name}`);
   const result = await runTransaction(cRef, (current) => (Number(current) || 0) + 1);
@@ -58,6 +71,9 @@ export async function nextCounter(name, prefix, pad = 4) {
   return `${prefix}${String(value).padStart(pad, "0")}`;
 }
 
+// --------------------------------------------------------------
+// Upload photo to Firebase Storage; falls back to base64 if upload fails
+// --------------------------------------------------------------
 export async function uploadPhoto(kind, id, file) {
   if (!file) return null;
   try {
@@ -80,6 +96,10 @@ function fileToDataUrl(file) {
   });
 }
 
+// --------------------------------------------------------------
+// Health probe – checks if the database is reachable
+// Used by app.js to show connection status
+// --------------------------------------------------------------
 export async function firebaseHealthCheck() {
   try {
     await get(dbRef(db, `${NS}/_meta`));
