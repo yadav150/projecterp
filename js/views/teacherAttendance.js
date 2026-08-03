@@ -1,6 +1,6 @@
 import { el, ICON, fmtDate, todayISO } from "../utils.js";
 import { toast, loadingState, confirmDialog } from "../ui.js";
-import { updateTeacherAttendance, getTeacherAttendance } from "../data.js";
+import { updateTeacherAttendance, getTeacherAttendance, deleteTeacherAttendance } from "../data.js";
 
 export function renderTeacherAttendance(teacherId) {
   const wrap = el("div", { class: "card" });
@@ -10,7 +10,6 @@ export function renderTeacherAttendance(teacherId) {
   ]));
   const body = el("div", { class: "card-body" });
 
-  // Date picker and status toggle
   const today = todayISO();
   const dateInput = el("input", { class: "input", type: "date", value: today, style: "max-width:180px;" });
   const statusSelect = el("select", { class: "select", style: "max-width:120px;" }, [
@@ -24,7 +23,6 @@ export function renderTeacherAttendance(teacherId) {
   ]);
   body.appendChild(actionRow);
 
-  // Attendance list
   const listContainer = el("div");
   body.appendChild(listContainer);
 
@@ -56,9 +54,7 @@ export function renderTeacherAttendance(teacherId) {
         el("td", {}, [
           el("button", { class: "icon-btn-sm", html: ICON.trash, onclick: async () => {
             if (await confirmDialog({ title: "Delete this attendance record?" })) {
-              // Remove entry by setting null
-              const ref = dbRef(db, `${PATH.teachers}/${teacherId}/attendance/${d}`);
-              await set(ref, null);
+              await deleteTeacherAttendance(teacherId, d);
               loadAttendance();
               toast({ type: "success", title: "Record deleted" });
             }
