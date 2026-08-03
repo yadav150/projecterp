@@ -52,7 +52,7 @@ export function fmtDateInput(d) {
 }
 
 export function todayISO() { return new Date().toISOString().slice(0, 10); }
-export function monthISO(d = new Date()) { return d.toISOString().slice(0, 7); }
+export function monthISO(d = new Date()) { return d.toISOString().slice(0, 7); } // YYYY-MM
 
 export function ageFromDob(dob) {
   if (!dob) return "";
@@ -106,14 +106,15 @@ export const PAY_MODES = ["Cash", "UPI", "Bank Transfer", "Cheque", "Card"];
 export const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
 export const SCHOOL = {
-  name: "Morning Glory English Academy",
-  tagline: "Shaping Futures Since 2025",
-  address: "Dikhlem, West Karbi Anglong, Assam — 782448",
-  phone: "+91 78965 79939",
-  email: "info@morninggloryacademy.edu.in",
-  website: "www.morninggloryacademy.edu.in"
+  name: "Bright Future Academy",
+  tagline: "Nurturing minds since 1998",
+  address: "12, Rose Avenue, Sector 21, Noida, Uttar Pradesh — 201301",
+  phone: "+91 98765 43210",
+  email: "info@brightfuture.edu",
+  website: "www.brightfuture.edu"
 };
 
+// Simple SVG loader for reuse
 export const ICON = {
   plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
   search: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
