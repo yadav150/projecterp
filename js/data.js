@@ -4,7 +4,6 @@ import {
   nextCounter, uploadPhoto
 } from "./firebase.js";
 
-// ---------- Helpers ----------
 function nowMs() { return Date.now(); }
 
 function subscribeCollection(path, cb) {
@@ -29,9 +28,7 @@ async function pushRecord(path, data) {
   return r.key;
 }
 
-// ================================================================
-//  STUDENTS
-// ================================================================
+// ---------- Students ----------
 export async function createStudent(payload, photoFile) {
   const admissionId = await nextCounter("admissionId", "ADM-", 5);
   const admissionNumber = await nextCounter("admissionNumber", "", 6);
@@ -52,21 +49,17 @@ export async function createStudent(payload, photoFile) {
   }
   return { id, ...data, photoUrl };
 }
-
 export async function updateStudent(id, payload, photoFile) {
   let photoUrl = payload.photoUrl;
   if (photoFile) photoUrl = await uploadPhoto("students", id, photoFile);
   await update(dbRef(db, `${PATH.students}/${id}`), { ...payload, photoUrl: photoUrl ?? null, updatedAt: nowMs() });
   return { id, ...payload, photoUrl };
 }
-
 export async function deleteStudent(id) { await remove(dbRef(db, `${PATH.students}/${id}`)); }
 export async function getStudent(id) { return getById(PATH.students, id); }
 export function subscribeStudents(cb) { return subscribeCollection(PATH.students, cb); }
 
-// ================================================================
-//  TEACHERS
-// ================================================================
+// ---------- Teachers ----------
 export async function createTeacher(payload, photoFile) {
   const teacherId = await nextCounter("teacherId", "TCH-", 4);
   const data = {
@@ -85,42 +78,34 @@ export async function createTeacher(payload, photoFile) {
   }
   return { id, ...data, photoUrl };
 }
-
 export async function updateTeacher(id, payload, photoFile) {
   let photoUrl = payload.photoUrl;
   if (photoFile) photoUrl = await uploadPhoto("teachers", id, photoFile);
   await update(dbRef(db, `${PATH.teachers}/${id}`), { ...payload, photoUrl: photoUrl ?? null, updatedAt: nowMs() });
   return { id, ...payload, photoUrl };
 }
-
 export async function deleteTeacher(id) { await remove(dbRef(db, `${PATH.teachers}/${id}`)); }
 export async function getTeacher(id) { return getById(PATH.teachers, id); }
 export function subscribeTeachers(cb) { return subscribeCollection(PATH.teachers, cb); }
 
-// ================================================================
-//  FEES
-// ================================================================
+// ---------- Fees ----------
 export async function recordFeePayment(payload) {
   const receiptNumber = await nextCounter("feeReceipt", "FR-", 6);
   const data = { ...payload, receiptNumber, createdAt: nowMs() };
   const id = await pushRecord(PATH.fees, data);
   return { id, ...data };
 }
-
 export async function deleteFee(id) { await remove(dbRef(db, `${PATH.fees}/${id}`)); }
 export async function getFee(id) { return getById(PATH.fees, id); }
 export function subscribeFees(cb) { return subscribeCollection(PATH.fees, cb); }
 
-// ================================================================
-//  SALARIES
-// ================================================================
+// ---------- Salary ----------
 export async function recordSalaryPayment(payload) {
   const receiptNumber = await nextCounter("salaryReceipt", "SR-", 6);
   const data = { ...payload, receiptNumber, createdAt: nowMs() };
   const id = await pushRecord(PATH.salaries, data);
   return { id, ...data };
 }
-
 export async function deleteSalary(id) { await remove(dbRef(db, `${PATH.salaries}/${id}`)); }
 export async function getSalary(id) { return getById(PATH.salaries, id); }
 export function subscribeSalaries(cb) { return subscribeCollection(PATH.salaries, cb); }
