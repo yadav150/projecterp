@@ -5,6 +5,9 @@ import {
 } from "../utils.js";
 import { DataTable, setCrumbs, openModal, confirmDialog, toast, loadingState } from "../ui.js";
 import { subscribeTeachers, createTeacher, updateTeacher, deleteTeacher, getTeacher } from "../data.js";
+import { renderTeacherAttendance } from "./teacherAttendance.js";
+import { renderTeacherSubjects } from "./teacherSubjects.js";
+import { renderTeacherExperience } from "./teacherExperience.js";
 
 let unsub = null;
 
@@ -100,7 +103,8 @@ function rowActions(items) {
   return wrap;
 }
 
-function openTeacherForm({ mode = "create", record = {} } = {}) {
+// ---------- Teacher Form (unchanged) ----------
+export function openTeacherForm({ mode = "create", record = {} } = {}) {
   const body = el("div");
   const form = teacherFormFields(record);
   body.appendChild(form.node);
@@ -129,7 +133,7 @@ function openTeacherForm({ mode = "create", record = {} } = {}) {
   };
 }
 
-function teacherFormFields(record = {}) {
+export function teacherFormFields(record = {}) {
   let photoFile = null;
   const photoInput = el("input", { type: "file", accept: "image/*", style: "display:none;" });
   const av = el("div", { class: "avatar", style: "width:64px;height:64px;" });
@@ -204,7 +208,7 @@ function teacherFormFields(record = {}) {
   };
 }
 
-function validateTeacher(d) {
+export function validateTeacher(d) {
   if (!required(d.name)) return "Full Name is required";
   if (!required(d.gender)) return "Gender is required";
   if (!required(d.qualification)) return "Qualification required";
@@ -216,38 +220,153 @@ function validateTeacher(d) {
   return null;
 }
 
-function profilePage(id) {
+// ---------- Enhanced Profile Page with Tabs ----------
+async function profilePage(id) {
   const page = el("div", { "data-testid": "teacher-profile" });
   page.appendChild(loadingState("Loading teacher…"));
-  getTeacher(id).then(r => {
-    page.innerHTML = "";
-    if (!r) { page.appendChild(el("div", { class: "state", text: "Teacher not found" })); return; }
-    page.appendChild(el("div", { class: "profile-head" }, [
-      (() => { const a = el("div", { class: "avatar lg" }); if (r.photoUrl) a.appendChild(el("img", { src: r.photoUrl })); else a.textContent = initials(r.name); return a; })(),
-      el("div", { class: "meta", style: "flex:1" }, [
-        el("h2", { text: r.name }),
-        el("p", { text: `${r.designation || "—"} · ${r.department || "—"}` }),
-        el("div", { class: "chips" }, [
-          el("span", { class: "badge indigo", text: r.teacherId || "" }),
-          el("span", { class: `badge ${r.status === "Active" ? "green" : "slate"}`, text: r.status || "Active" })
-        ])
-      ]),
-      el("button", { class: "btn btn-outline", onclick: () => openTeacherForm({ mode: "edit", record: r }), html: `${ICON.edit}<span>Edit</span>` })
-    ]));
+  const r = await getTeacher(id);
+  page.innerHTML = "";
+  if (!r) { page.appendChild(el("div", { class: "state", text: "Teacher not found" })); return page; }
+
+  // Header (always visible)
+  const header = el("div", { class: "profile-head" }, [
+    (() => { const a = el("div", { class: "avatar lg" }); if (r.photoUrl) a.appendChild(el("img", { src: r.photoUrl })); else a.textContent = initials(r.name); return a; })(),
+    el("div", { class: "meta", style: "flex:1" }, [
+      el("h2", { text: r.name }),
+      el("p", { text: `${r.designation || "—"} · ${r.department || "—"}` }),
+      el("div", { class: "chips" }, [
+        el("span", { class: "badge indigo", text: r.teacherId || "" }),
+        el("span", { class: `badge ${r.status === "Active" ? "green" : "slate"}`, text: r.status || "Active" })
+      ])
+    ]),
+    el("button", { class: "btn btn-outline", onclick: () => openTeacherForm({ mode: "edit", record: r }), html: `${ICON.edit}<span>Edit</span>` })
+  ]);
+  page.appendChild(header);
+
+  // Tab bar
+  const tabs = el("div", { class: "profile-tabs", style: "display:flex; gap:4px; margin:16px 0 12px 0; border-bottom:1px solid var(--border); padding-bottom:4px;" });
+  const tabNames = ["Profile", "Attendance", "Subjects", "Experience", "Salary"];
+  const tabContents = {};
+
+  const tabButtons = tabNames.map(name => {
+    const btn = el("button", {
+      class: "btn btn-sm",
+      style: `border-radius: var(--radius) var(--radius) 0 0; ${name === "Profile" ? "background: var(--primary); color:#fff;" : "background:transparent; color:var(--text-2);"}`
+    }, name);
+    btn.dataset.tab = name;
+    btn.addEventListener("click", () => switchTab(name));
+    tabs.appendChild(btn);
+    return btn;
+  });
+
+  page.appendChild(tabs);
+
+  // Tab content container
+  const content = el("div", { class: "tab-content", style: "min-height:300px;" });
+  page.appendChild(content);
+
+  // Render functions for each tab
+  function renderProfile() {
     const details = [
       ["Name", r.name], ["Gender", r.gender], ["Qualification", r.qualification],
       ["Experience", r.experience ? `${r.experience} yrs` : "—"], ["Joining Date", fmtDate(r.joiningDate)],
       ["Department", r.department], ["Designation", r.designation], ["Salary", fmtCurrency(r.salary || 0)],
       ["Phone", r.phone], ["Email", r.email], ["Address", r.address], ["Status", r.status]
     ];
-    page.appendChild(el("div", { class: "card" }, [
+    return el("div", { class: "card" }, [
       el("div", { class: "card-header" }, [el("div", { class: "card-title", text: "Teacher Details" })]),
       el("div", { class: "card-body" }, [
         el("div", { class: "detail-grid" }, details.map(([k, v]) => el("div", { class: "detail-row" }, [
           el("div", { class: "k", text: k }), el("div", { class: "v", text: v || "—" })
         ])))
       ])
+    ]);
+  }
+
+  function renderAttendance() {
+    return renderTeacherAttendance(r.id);
+  }
+
+  function renderSubjects() {
+    return renderTeacherSubjects(r.id);
+  }
+
+  function renderExperience() {
+    return renderTeacherExperience(r.id);
+  }
+
+  function renderSalary() {
+    // Simple salary update
+    const wrap = el("div", { class: "card" });
+    wrap.appendChild(el("div", { class: "card-header" }, [
+      el("div", { class: "card-title", text: "Salary Management" }),
+      el("div", { class: "card-subtitle", text: "Update base salary for this teacher" })
     ]));
-  });
+    const body = el("div", { class: "card-body" });
+    const currentSal = fmtCurrency(r.salary || 0);
+    body.appendChild(el("div", { style: "margin-bottom:12px;" }, [
+      el("label", { style: "font-weight:600;", text: "Current Salary: " }),
+      el("span", { style: "font-size:18px;color:var(--primary);", text: currentSal })
+    ]));
+    const newSalInput = el("input", { class: "input", type: "number", min: "0", step: "0.01", value: r.salary || 0, style: "max-width:200px;" });
+    const updateBtn = el("button", { class: "btn btn-primary", text: "Update Salary", onclick: async () => {
+      const val = Number(newSalInput.value);
+      if (val <= 0) { toast({ type: "error", title: "Enter a valid salary" }); return; }
+      updateBtn.disabled = true; updateBtn.textContent = "Updating…";
+      try {
+        await updateTeacherSalary(r.id, val);
+        toast({ type: "success", title: "Salary updated" });
+        // Refresh the view
+        window.location.reload();
+      } catch (e) {
+        toast({ type: "error", title: "Update failed", message: e.message });
+        updateBtn.disabled = false; updateBtn.textContent = "Update Salary";
+      }
+    }});
+    body.appendChild(el("div", { style: "display:flex;gap:12px;align-items:center;margin-top:8px;" }, [
+      el("label", { text: "New Salary: " }),
+      newSalInput,
+      updateBtn
+    ]));
+    wrap.appendChild(body);
+    return wrap;
+  }
+
+  // Tab switching
+  const tabRenderers = {
+    "Profile": renderProfile,
+    "Attendance": renderAttendance,
+    "Subjects": renderSubjects,
+    "Experience": renderExperience,
+    "Salary": renderSalary
+  };
+
+  let currentTab = "Profile";
+
+  function switchTab(name) {
+    if (name === currentTab) return;
+    currentTab = name;
+    // Update button styles
+    tabButtons.forEach(btn => {
+      if (btn.dataset.tab === name) {
+        btn.style.background = "var(--primary)";
+        btn.style.color = "#fff";
+      } else {
+        btn.style.background = "transparent";
+        btn.style.color = "var(--text-2)";
+      }
+    });
+    // Render content
+    content.innerHTML = "";
+    const renderFn = tabRenderers[name];
+    if (renderFn) {
+      const node = renderFn();
+      content.appendChild(node);
+    }
+  }
+
+  // Initial render
+  switchTab("Profile");
+
   return page;
 }
