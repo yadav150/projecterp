@@ -37,13 +37,11 @@ import { AnalyticsView } from "./views/analytics.js";
     if (route === "analytics") {
       const page = document.getElementById("page");
       if (page) {
-        // Unmount previous view
         const prev = page.firstChild;
         if (prev) prev.dispatchEvent(new CustomEvent("view:unmount"));
         page.innerHTML = "";
         const node = AnalyticsView();
         page.appendChild(node);
-        // Update active nav
         document.querySelectorAll(".nav-item").forEach(a =>
           a.classList.toggle("active", a.dataset.route === "analytics")
         );
@@ -63,10 +61,13 @@ import { AnalyticsView } from "./views/analytics.js";
   }, true);
 
   // ----- 4. Handle initial load (if URL is already #/analytics) -----
-  // Wait for app.js to render first, then override if needed.
+  // Use a small delay to ensure app.js has mounted the first view.
   window.addEventListener("DOMContentLoaded", function() {
     setTimeout(() => {
-      renderAnalytics();
-    }, 0);
+      // Only override if the current hash is analytics
+      if (parseHash().route === "analytics") {
+        renderAnalytics();
+      }
+    }, 50);
   });
 })();
