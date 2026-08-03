@@ -459,3 +459,27 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
   .stat-value { font-size: 18px; }
   .page-header { align-items: flex-start; flex-direction: column; }
 }
+/* ---------- Profile Tabs ---------- */
+.profile-tabs button {
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s;
+}
+.profile-tabs button:hover {
+  background: var(--bg);
+}
+.profile-tabs button[data-tab]:not(.active) {
+  background: transparent;
+  color: var(--text-2);
+}
+.profile-tabs button[data-tab].active {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* Ensure tab content has proper padding */
+.tab-content {
+  padding: 4px 0;
+}
