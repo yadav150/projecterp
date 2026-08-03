@@ -1,21 +1,27 @@
-// Teachers view — list, filter, search, add, edit, delete
+// Teachers view — list, filter, search, add, edit, delete, tabbed profile
 import {
   el, ICON, initials, fmtDate, todayISO, fmtCurrency, GENDERS,
   DEPARTMENTS, DESIGNATIONS, required, isEmail, isPhone
 } from "../utils.js";
 import { DataTable, setCrumbs, openModal, confirmDialog, toast, loadingState } from "../ui.js";
-import { subscribeTeachers, createTeacher, updateTeacher, deleteTeacher, getTeacher, updateTeacherSalary } from "../data.js";
+import { 
+  subscribeTeachers, createTeacher, updateTeacher, deleteTeacher, getTeacher, 
+  updateTeacherSalary 
+} from "../data.js";
 import { renderTeacherAttendance } from "./teacherAttendance.js";
 import { renderTeacherSubjects } from "./teacherSubjects.js";
 import { renderTeacherExperience } from "./teacherExperience.js";
 
 let unsub = null;
 
+// ---------- Main View ----------
 export function TeachersView({ id } = {}) {
   setCrumbs(id ? [{ label: "Teachers", href: "#/teachers" }, { label: "Profile" }] : [{ label: "Teachers" }]);
   if (id) return profilePage(id);
 
   const page = el("div", { "data-testid": "teachers-view" });
+
+  // Header
   page.appendChild(el("div", { class: "page-header" }, [
     el("div", {}, [
       el("h1", { class: "page-title", text: "Teachers" }),
@@ -26,9 +32,12 @@ export function TeachersView({ id } = {}) {
     ])
   ]));
 
-  const mount = el("div"); page.appendChild(mount);
+  // Mount
+  const mount = el("div");
+  page.appendChild(mount);
   mount.appendChild(loadingState("Loading teachers…"));
 
+  // Filters
   const deptSel = el("select", { class: "select", "data-testid": "filter-dept" }, [
     el("option", { value: "", text: "All Departments" }),
     ...DEPARTMENTS.map(d => el("option", { value: d, text: d }))
@@ -38,42 +47,59 @@ export function TeachersView({ id } = {}) {
     el("option", { value: "Active", text: "Active" }),
     el("option", { value: "Inactive", text: "Inactive" })
   ]);
+
   let table = null, rows = [];
   [deptSel, statusSel].forEach(s => s.addEventListener("change", () => table && table.setRows(filtered())));
+
   function filtered() {
     return rows.filter(r => (!deptSel.value || r.department === deptSel.value) && (!statusSel.value || r.status === statusSel.value));
   }
 
+  // Subscribe
   unsub && unsub();
   unsub = subscribeTeachers((list, err) => {
-    if (err) { mount.innerHTML = ""; mount.appendChild(el("div", { class: "state", text: "Failed to load teachers." })); return; }
+    if (err) {
+      mount.innerHTML = "";
+      mount.appendChild(el("div", { class: "state", text: "Failed to load teachers." }));
+      return;
+    }
     rows = list;
     mount.innerHTML = "";
     table = DataTable({
       testId: "teachers-table",
       columns: [
-        { key: "name", label: "Teacher", sortable: true, render: r => el("div", { class: "cell-user" }, [
-          avatar(r),
-          el("div", {}, [
-            el("div", { class: "u-name", text: r.name || "—" }),
-            el("div", { class: "u-sub", text: `${r.teacherId || "—"} · ${r.designation || ""}` })
+        {
+          key: "name", label: "Teacher", sortable: true,
+          render: r => el("div", { class: "cell-user" }, [
+            avatar(r),
+            el("div", {}, [
+              el("div", { class: "u-name", text: r.name || "—" }),
+              el("div", { class: "u-sub", text: `${r.teacherId || "—"} · ${r.designation || ""}` })
+            ])
           ])
-        ]) },
+        },
         { key: "department", label: "Department", sortable: true, render: r => r.department || "—" },
         { key: "qualification", label: "Qualification", render: r => r.qualification || "—" },
         { key: "experience", label: "Exp.", sortable: true, render: r => r.experience ? `${r.experience} yrs` : "—" },
         { key: "phone", label: "Phone", render: r => r.phone || "—" },
         { key: "salary", label: "Salary", sortable: true, render: r => fmtCurrency(r.salary || 0) },
-        { key: "status", label: "Status", render: r => `<span class="badge ${r.status === "Active" ? "green" : "slate"}">${r.status || "Active"}</span>` },
-        { key: "_", label: "", render: r => rowActions([
-          { icon: ICON.view, testId: `tview-${r.id}`, onClick: () => location.hash = `#/teachers/${r.id}`, label: "View" },
-          { icon: ICON.edit, testId: `tedit-${r.id}`, onClick: () => openTeacherForm({ mode: "edit", record: r }), label: "Edit" },
-          { icon: ICON.trash, danger: true, testId: `tdel-${r.id}`, onClick: async () => {
-            if (await confirmDialog({ title: "Delete this teacher?", message: "This action cannot be undone." })) {
-              await deleteTeacher(r.id); toast({ type: "success", title: "Teacher deleted" });
-            }
-          }, label: "Delete" }
-        ]) }
+        {
+          key: "status", label: "Status",
+          render: r => `<span class="badge ${r.status === "Active" ? "green" : "slate"}">${r.status || "Active"}</span>`
+        },
+        {
+          key: "_", label: "",
+          render: r => rowActions([
+            { icon: ICON.view, testId: `tview-${r.id}`, onClick: () => location.hash = `#/teachers/${r.id}`, label: "View" },
+            { icon: ICON.edit, testId: `tedit-${r.id}`, onClick: () => openTeacherForm({ mode: "edit", record: r }), label: "Edit" },
+            { icon: ICON.trash, danger: true, testId: `tdel-${r.id}`, onClick: async () => {
+              if (await confirmDialog({ title: "Delete this teacher?", message: "This action cannot be undone." })) {
+                await deleteTeacher(r.id);
+                toast({ type: "success", title: "Teacher deleted" });
+              }
+            }, label: "Delete" }
+          ])
+        }
       ],
       rows: filtered(),
       searchFields: ["name", "teacherId", "phone", "email", "department", "designation"],
@@ -83,10 +109,12 @@ export function TeachersView({ id } = {}) {
     });
     mount.appendChild(table.node);
   });
+
   page.addEventListener("view:unmount", () => { unsub && unsub(); unsub = null; });
   return page;
 }
 
+// ---------- Helpers ----------
 function avatar(r) {
   const a = el("div", { class: "avatar" });
   if (r.photoUrl) a.appendChild(el("img", { src: r.photoUrl }));
@@ -98,19 +126,22 @@ function rowActions(items) {
   const wrap = el("div", { class: "row-actions" });
   items.forEach(it => {
     const b = el("button", { class: `icon-btn-sm ${it.danger ? "danger" : ""}`, title: it.label, "data-testid": it.testId, html: it.icon });
-    b.onclick = it.onClick; wrap.appendChild(b);
+    b.onclick = it.onClick;
+    wrap.appendChild(b);
   });
   return wrap;
 }
 
-// ---------- Teacher Form (unchanged) ----------
+// ---------- Teacher Form ----------
 export function openTeacherForm({ mode = "create", record = {} } = {}) {
   const body = el("div");
   const form = teacherFormFields(record);
   body.appendChild(form.node);
+
   const saveBtn = el("button", { class: "btn btn-primary", "data-testid": "save-teacher-btn", text: mode === "create" ? "Save Teacher" : "Update Teacher" });
   const cancelBtn = el("button", { class: "btn btn-outline", text: "Cancel" });
   const m = openModal({ title: mode === "create" ? "Add Teacher" : "Edit Teacher", body, footer: [cancelBtn, saveBtn], size: "large" });
+
   cancelBtn.onclick = () => m.close();
   saveBtn.onclick = async () => {
     const data = form.getValue();
@@ -137,11 +168,17 @@ export function teacherFormFields(record = {}) {
   let photoFile = null;
   const photoInput = el("input", { type: "file", accept: "image/*", style: "display:none;" });
   const av = el("div", { class: "avatar", style: "width:64px;height:64px;" });
-  if (record.photoUrl) av.appendChild(el("img", { src: record.photoUrl })); else av.textContent = initials(record.name || "T");
+  if (record.photoUrl) av.appendChild(el("img", { src: record.photoUrl }));
+  else av.textContent = initials(record.name || "T");
+
   photoInput.addEventListener("change", e => {
     photoFile = e.target.files?.[0] || null;
-    if (photoFile) { av.innerHTML = ""; av.appendChild(el("img", { src: URL.createObjectURL(photoFile) })); }
+    if (photoFile) {
+      av.innerHTML = "";
+      av.appendChild(el("img", { src: URL.createObjectURL(photoFile) }));
+    }
   });
+
   const uploader = el("div", { class: "photo-uploader" }, [
     av,
     el("div", { style: "flex:1" }, [
@@ -166,16 +203,20 @@ export function teacherFormFields(record = {}) {
     { key: "address", label: "Address", type: "textarea" },
     { key: "status", label: "Status", type: "select", options: ["Active", "Inactive"], defaultValue: "Active" }
   ];
-  const node = el("div"); node.appendChild(uploader);
+
+  const node = el("div");
+  node.appendChild(uploader);
   let currentSection = null;
   let grid = el("div", { class: "form-grid", style: "margin-top:16px;" });
   node.appendChild(grid);
   const inputs = {};
+
   fields.forEach(f => {
     if (f.section && f.section !== currentSection) {
       currentSection = f.section;
       node.appendChild(el("div", { class: "form-section-title", text: f.section }));
-      grid = el("div", { class: "form-grid" }); node.appendChild(grid);
+      grid = el("div", { class: "form-grid" });
+      node.appendChild(grid);
     }
     const row = el("div", { class: "form-row" });
     row.appendChild(el("label", { html: `${f.label} ${f.required ? '<span class="req">*</span>' : ""}` }));
@@ -193,9 +234,11 @@ export function teacherFormFields(record = {}) {
       inp = el("input", { class: "input", type: f.type || "text", "data-testid": `teacher-${f.key}` });
       inp.value = val;
     }
-    row.appendChild(inp); grid.appendChild(row);
+    row.appendChild(inp);
+    grid.appendChild(row);
     inputs[f.key] = inp;
   });
+
   return {
     node,
     getValue: () => {
@@ -220,7 +263,7 @@ export function validateTeacher(d) {
   return null;
 }
 
-// ---------- Profile Page (Robust with Error Logging) ----------
+// ---------- Profile Page (Tabbed) ----------
 async function profilePage(id) {
   const page = el("div", { "data-testid": "teacher-profile" });
 
@@ -244,7 +287,12 @@ async function profilePage(id) {
 
   // --- Header ---
   const header = el("div", { class: "profile-head" }, [
-    (() => { const a = el("div", { class: "avatar lg" }); if (teacher.photoUrl) a.appendChild(el("img", { src: teacher.photoUrl })); else a.textContent = initials(teacher.name); return a; })(),
+    (() => {
+      const a = el("div", { class: "avatar lg" });
+      if (teacher.photoUrl) a.appendChild(el("img", { src: teacher.photoUrl }));
+      else a.textContent = initials(teacher.name);
+      return a;
+    })(),
     el("div", { class: "meta", style: "flex:1" }, [
       el("h2", { text: teacher.name }),
       el("p", { text: `${teacher.designation || "—"} · ${teacher.department || "—"}` }),
@@ -335,7 +383,6 @@ async function profilePage(id) {
       try {
         await updateTeacherSalary(teacher.id, val);
         toast({ type: "success", title: "Salary updated" });
-        // Refresh the page
         location.reload();
       } catch (e) {
         toast({ type: "error", title: "Update failed", message: e.message });
