@@ -1,5 +1,6 @@
 // Utility functions: formatters, validators, DOM helpers, dataset filters/sort/paginate
 
+// ---------- DOM Helpers ----------
 export function el(tag, attrs = {}, children = []) {
   const node = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
@@ -28,6 +29,7 @@ export function debounce(fn, wait = 250) {
   return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), wait); };
 }
 
+// ---------- Text & Formatting ----------
 export function initials(name = "") {
   return name.trim().split(/\s+/).slice(0, 2).map(w => w[0] || "").join("").toUpperCase() || "?";
 }
@@ -52,7 +54,7 @@ export function fmtDateInput(d) {
 }
 
 export function todayISO() { return new Date().toISOString().slice(0, 10); }
-export function monthISO(d = new Date()) { return d.toISOString().slice(0, 7); } // YYYY-MM
+export function monthISO(d = new Date()) { return d.toISOString().slice(0, 7); }
 
 export function ageFromDob(dob) {
   if (!dob) return "";
@@ -63,10 +65,12 @@ export function ageFromDob(dob) {
   return age >= 0 ? `${age} yrs` : "";
 }
 
+// ---------- Validators ----------
 export function required(val) { return val != null && String(val).trim() !== ""; }
 export function isEmail(v) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v || ""); }
 export function isPhone(v) { return /^[0-9\-+\s()]{7,18}$/.test(v || ""); }
 
+// ---------- Data Helpers ----------
 export function paginate(list, page, pageSize) {
   const total = list.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -93,6 +97,7 @@ export function textIncludes(hay, needle) {
   return String(hay ?? "").toLowerCase().includes(needle.toLowerCase());
 }
 
+// ---------- Constants ----------
 export const CLASSES = ["Nursery", "LKG", "UKG", "I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
 export const SECTIONS = ["A", "B", "C", "D"];
 export const GENDERS = ["Male", "Female", "Other"];
@@ -105,16 +110,17 @@ export const FEE_TYPES = ["Tuition Fee", "Admission Fee", "Exam Fee", "Transport
 export const PAY_MODES = ["Cash", "UPI", "Bank Transfer", "Cheque", "Card"];
 export const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
+// ---------- School Configuration ----------
 export const SCHOOL = {
   name: "Morning Glory English Academy",
-  tagline: "Shaping Futures Since 2010",
+  tagline: "Shaping Futures Since 2025",
   address: "Dikhlem, West Karbi Anglong, Assam — 782448",
   phone: "+91 78965 79939",
   email: "info@morninggloryacademy.edu.in",
   website: "www.morninggloryacademy.edu.in"
 };
 
-// Simple SVG loader for reuse
+// ---------- SVG Icons ----------
 export const ICON = {
   plus: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
   search: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`,
