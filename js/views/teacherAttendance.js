@@ -1,4 +1,3 @@
-// Teacher Attendance Tab
 import { el, ICON, fmtDate, todayISO } from "../utils.js";
 import { toast, loadingState, confirmDialog } from "../ui.js";
 import { updateTeacherAttendance, getTeacherAttendance, deleteTeacherAttendance } from "../data.js";
@@ -11,7 +10,6 @@ export function renderTeacherAttendance(teacherId) {
   ]));
   const body = el("div", { class: "card-body" });
 
-  // Mark attendance row
   const today = todayISO();
   const dateInput = el("input", { class: "input", type: "date", value: today, style: "max-width:180px;" });
   const statusSelect = el("select", { class: "select", style: "max-width:120px;" }, [
@@ -25,7 +23,6 @@ export function renderTeacherAttendance(teacherId) {
   ]);
   body.appendChild(actionRow);
 
-  // Attendance list container
   const listContainer = el("div");
   body.appendChild(listContainer);
 
