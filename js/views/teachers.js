@@ -4,7 +4,7 @@ import {
   DEPARTMENTS, DESIGNATIONS, required, isEmail, isPhone
 } from "../utils.js";
 import { DataTable, setCrumbs, openModal, confirmDialog, toast, loadingState } from "../ui.js";
-import { subscribeTeachers, createTeacher, updateTeacher, deleteTeacher, getTeacher } from "../data.js";
+import { subscribeTeachers, createTeacher, updateTeacher, deleteTeacher, getTeacher, updateTeacherSalary } from "../data.js";
 import { renderTeacherAttendance } from "./teacherAttendance.js";
 import { renderTeacherSubjects } from "./teacherSubjects.js";
 import { renderTeacherExperience } from "./teacherExperience.js";
@@ -246,8 +246,6 @@ async function profilePage(id) {
   // Tab bar
   const tabs = el("div", { class: "profile-tabs", style: "display:flex; gap:4px; margin:16px 0 12px 0; border-bottom:1px solid var(--border); padding-bottom:4px;" });
   const tabNames = ["Profile", "Attendance", "Subjects", "Experience", "Salary"];
-  const tabContents = {};
-
   const tabButtons = tabNames.map(name => {
     const btn = el("button", {
       class: "btn btn-sm",
@@ -296,7 +294,6 @@ async function profilePage(id) {
   }
 
   function renderSalary() {
-    // Simple salary update
     const wrap = el("div", { class: "card" });
     wrap.appendChild(el("div", { class: "card-header" }, [
       el("div", { class: "card-title", text: "Salary Management" }),
@@ -316,7 +313,6 @@ async function profilePage(id) {
       try {
         await updateTeacherSalary(r.id, val);
         toast({ type: "success", title: "Salary updated" });
-        // Refresh the view
         window.location.reload();
       } catch (e) {
         toast({ type: "error", title: "Update failed", message: e.message });
@@ -346,7 +342,6 @@ async function profilePage(id) {
   function switchTab(name) {
     if (name === currentTab) return;
     currentTab = name;
-    // Update button styles
     tabButtons.forEach(btn => {
       if (btn.dataset.tab === name) {
         btn.style.background = "var(--primary)";
@@ -356,7 +351,6 @@ async function profilePage(id) {
         btn.style.color = "var(--text-2)";
       }
     });
-    // Render content
     content.innerHTML = "";
     const renderFn = tabRenderers[name];
     if (renderFn) {
@@ -365,8 +359,6 @@ async function profilePage(id) {
     }
   }
 
-  // Initial render
   switchTab("Profile");
-
   return page;
 }
