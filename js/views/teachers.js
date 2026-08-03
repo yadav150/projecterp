@@ -1,13 +1,10 @@
-// Teachers view — list, filter, search, add, edit, delete, profile with tabs
+// Teachers view — list, filter, search, add, edit, delete
 import {
   el, ICON, initials, fmtDate, todayISO, fmtCurrency, GENDERS,
   DEPARTMENTS, DESIGNATIONS, required, isEmail, isPhone
 } from "../utils.js";
 import { DataTable, setCrumbs, openModal, confirmDialog, toast, loadingState } from "../ui.js";
-import { subscribeTeachers, createTeacher, updateTeacher, deleteTeacher, getTeacher, updateTeacherSalary } from "../data.js";
-import { renderTeacherAttendance } from "./teacherAttendance.js";
-import { renderTeacherSubjects } from "./teacherSubjects.js";
-import { renderTeacherExperience } from "./teacherExperience.js";
+import { subscribeTeachers, createTeacher, updateTeacher, deleteTeacher, getTeacher } from "../data.js";
 
 let unsub = null;
 
@@ -103,8 +100,7 @@ function rowActions(items) {
   return wrap;
 }
 
-// ---------- Teacher Form ----------
-export function openTeacherForm({ mode = "create", record = {} } = {}) {
+function openTeacherForm({ mode = "create", record = {} } = {}) {
   const body = el("div");
   const form = teacherFormFields(record);
   body.appendChild(form.node);
@@ -133,7 +129,7 @@ export function openTeacherForm({ mode = "create", record = {} } = {}) {
   };
 }
 
-export function teacherFormFields(record = {}) {
+function teacherFormFields(record = {}) {
   let photoFile = null;
   const photoInput = el("input", { type: "file", accept: "image/*", style: "display:none;" });
   const av = el("div", { class: "avatar", style: "width:64px;height:64px;" });
@@ -208,7 +204,7 @@ export function teacherFormFields(record = {}) {
   };
 }
 
-export function validateTeacher(d) {
+function validateTeacher(d) {
   if (!required(d.name)) return "Full Name is required";
   if (!required(d.gender)) return "Gender is required";
   if (!required(d.qualification)) return "Qualification required";
@@ -220,23 +216,13 @@ export function validateTeacher(d) {
   return null;
 }
 
-// ---------- Profile Page with Tabs ----------
-async function profilePage(id) {
+function profilePage(id) {
   const page = el("div", { "data-testid": "teacher-profile" });
-
-  // Back button
-  const backBtn = el("a", { class: "btn btn-outline", href: "#/teachers", html: `${ICON.chevL}<span>Back to Teachers</span>` });
-  page.appendChild(el("div", { style: "margin-bottom:16px;" }, [backBtn]));
-
-  try {
-    const r = await getTeacher(id);
-    if (!r) {
-      page.appendChild(el("div", { class: "state", text: "Teacher not found" }));
-      return page;
-    }
-
-    // Header
-    const header = el("div", { class: "profile-head" }, [
+  page.appendChild(loadingState("Loading teacher…"));
+  getTeacher(id).then(r => {
+    page.innerHTML = "";
+    if (!r) { page.appendChild(el("div", { class: "state", text: "Teacher not found" })); return; }
+    page.appendChild(el("div", { class: "profile-head" }, [
       (() => { const a = el("div", { class: "avatar lg" }); if (r.photoUrl) a.appendChild(el("img", { src: r.photoUrl })); else a.textContent = initials(r.name); return a; })(),
       el("div", { class: "meta", style: "flex:1" }, [
         el("h2", { text: r.name }),
@@ -247,138 +233,21 @@ async function profilePage(id) {
         ])
       ]),
       el("button", { class: "btn btn-outline", onclick: () => openTeacherForm({ mode: "edit", record: r }), html: `${ICON.edit}<span>Edit</span>` })
-    ]);
-    page.appendChild(header);
-
-    // Tabs
-    const tabs = el("div", { class: "profile-tabs", style: "display:flex; gap:4px; margin:16px 0 12px 0; border-bottom:1px solid var(--border); padding-bottom:4px;" });
-    const tabNames = ["Profile", "Attendance", "Subjects", "Experience", "Salary"];
-    const tabButtons = [];
-    const content = el("div", { class: "tab-content", style: "min-height:300px;" });
-
-    tabNames.forEach(name => {
-      const btn = el("button", {
-        class: "btn btn-sm",
-        style: `border-radius: var(--radius) var(--radius) 0 0; background:transparent; color:var(--text-2);`
-      }, name);
-      btn.dataset.tab = name;
-      btn.addEventListener("click", () => switchTab(name));
-      tabs.appendChild(btn);
-      tabButtons.push(btn);
-    });
-    page.appendChild(tabs);
-    page.appendChild(content);
-
-    // Renderers
-    function renderProfile() {
-      const details = [
-        ["Name", r.name], ["Gender", r.gender], ["Qualification", r.qualification],
-        ["Experience", r.experience ? `${r.experience} yrs` : "—"], ["Joining Date", fmtDate(r.joiningDate)],
-        ["Department", r.department], ["Designation", r.designation], ["Salary", fmtCurrency(r.salary || 0)],
-        ["Phone", r.phone], ["Email", r.email], ["Address", r.address], ["Status", r.status]
-      ];
-      return el("div", { class: "card" }, [
-        el("div", { class: "card-header" }, [el("div", { class: "card-title", text: "Teacher Details" })]),
-        el("div", { class: "card-body" }, [
-          el("div", { class: "detail-grid" }, details.map(([k, v]) => el("div", { class: "detail-row" }, [
-            el("div", { class: "k", text: k }), el("div", { class: "v", text: v || "—" })
-          ])))
-        ])
-      ]);
-    }
-
-    function renderAttendance() {
-      try { return renderTeacherAttendance(r.id); } catch (e) {
-        return el("div", { class: "state", text: "Attendance module error: " + e.message });
-      }
-    }
-
-    function renderSubjects() {
-      try { return renderTeacherSubjects(r.id); } catch (e) {
-        return el("div", { class: "state", text: "Subjects module error: " + e.message });
-      }
-    }
-
-    function renderExperience() {
-      try { return renderTeacherExperience(r.id); } catch (e) {
-        return el("div", { class: "state", text: "Experience module error: " + e.message });
-      }
-    }
-
-    function renderSalary() {
-      const wrap = el("div", { class: "card" });
-      wrap.appendChild(el("div", { class: "card-header" }, [
-        el("div", { class: "card-title", text: "Salary Management" }),
-        el("div", { class: "card-subtitle", text: "Update base salary for this teacher" })
-      ]));
-      const body = el("div", { class: "card-body" });
-      const currentSal = fmtCurrency(r.salary || 0);
-      body.appendChild(el("div", { style: "margin-bottom:12px;" }, [
-        el("label", { style: "font-weight:600;", text: "Current Salary: " }),
-        el("span", { style: "font-size:18px;color:var(--primary);", text: currentSal })
-      ]));
-      const newSalInput = el("input", { class: "input", type: "number", min: "0", step: "0.01", value: r.salary || 0, style: "max-width:200px;" });
-      const updateBtn = el("button", { class: "btn btn-primary", text: "Update Salary", onclick: async () => {
-        const val = Number(newSalInput.value);
-        if (val <= 0) { toast({ type: "error", title: "Enter a valid salary" }); return; }
-        updateBtn.disabled = true; updateBtn.textContent = "Updating…";
-        try {
-          await updateTeacherSalary(r.id, val);
-          toast({ type: "success", title: "Salary updated" });
-          location.reload();
-        } catch (e) {
-          toast({ type: "error", title: "Update failed", message: e.message });
-          updateBtn.disabled = false; updateBtn.textContent = "Update Salary";
-        }
-      }});
-      body.appendChild(el("div", { style: "display:flex;gap:12px;align-items:center;margin-top:8px;" }, [
-        el("label", { text: "New Salary: " }),
-        newSalInput,
-        updateBtn
-      ]));
-      wrap.appendChild(body);
-      return wrap;
-    }
-
-    const tabRenderers = {
-      "Profile": renderProfile,
-      "Attendance": renderAttendance,
-      "Subjects": renderSubjects,
-      "Experience": renderExperience,
-      "Salary": renderSalary
-    };
-
-    let currentTab = "Profile";
-
-    function switchTab(name) {
-      if (name === currentTab) return;
-      currentTab = name;
-      tabButtons.forEach(btn => {
-        if (btn.dataset.tab === name) {
-          btn.style.background = "var(--primary)";
-          btn.style.color = "#fff";
-        } else {
-          btn.style.background = "transparent";
-          btn.style.color = "var(--text-2)";
-        }
-      });
-      content.innerHTML = "";
-      const renderFn = tabRenderers[name];
-      if (renderFn) {
-        try {
-          const node = renderFn();
-          content.appendChild(node);
-        } catch (e) {
-          content.appendChild(el("div", { class: "state", text: "Error loading tab: " + e.message }));
-        }
-      }
-    }
-
-    switchTab("Profile");
-
-  } catch (e) {
-    page.appendChild(el("div", { class: "state", text: "Error loading profile: " + e.message }));
-  }
-
+    ]));
+    const details = [
+      ["Name", r.name], ["Gender", r.gender], ["Qualification", r.qualification],
+      ["Experience", r.experience ? `${r.experience} yrs` : "—"], ["Joining Date", fmtDate(r.joiningDate)],
+      ["Department", r.department], ["Designation", r.designation], ["Salary", fmtCurrency(r.salary || 0)],
+      ["Phone", r.phone], ["Email", r.email], ["Address", r.address], ["Status", r.status]
+    ];
+    page.appendChild(el("div", { class: "card" }, [
+      el("div", { class: "card-header" }, [el("div", { class: "card-title", text: "Teacher Details" })]),
+      el("div", { class: "card-body" }, [
+        el("div", { class: "detail-grid" }, details.map(([k, v]) => el("div", { class: "detail-row" }, [
+          el("div", { class: "k", text: k }), el("div", { class: "v", text: v || "—" })
+        ])))
+      ])
+    ]));
+  });
   return page;
 }
