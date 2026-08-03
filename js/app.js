@@ -8,11 +8,10 @@ import { FeesView } from "./views/fees.js";
 import { SalaryView } from "./views/salary.js";
 import { ReceiptsView } from "./views/receipts.js";
 
-// New Academic Features
+// New Academic Features (without Timetable)
 import { StudentRecordsView } from "./views/studentRecords.js";
 import { AttendanceView } from "./views/attendance.js";
 import { ExaminationsView } from "./views/examinations.js";
-import { TimetableView } from "./views/timetable.js";
 
 const routes = {
   dashboard: () => DashboardView(),
@@ -22,11 +21,10 @@ const routes = {
   fees: () => FeesView(),
   salary: () => SalaryView(),
   receipts: () => ReceiptsView(),
-  // New routes
+  // Academic routes
   "student-records": (p) => StudentRecordsView(p),
   attendance: () => AttendanceView(),
-  examinations: () => ExaminationsView(),
-  timetable: () => TimetableView()
+  examinations: () => ExaminationsView()
 };
 
 const page = document.getElementById("page");
