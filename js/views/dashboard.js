@@ -7,7 +7,7 @@ export function DashboardView() {
   setCrumbs([{ label: "Dashboard" }]);
   const page = el("div");
 
-  // ---------- Header ----------
+  // Header
   page.appendChild(el("div", { class: "page-header" }, [
     el("div", {}, [
       el("h1", { class: "page-title", text: "Dashboard" }),
@@ -15,30 +15,24 @@ export function DashboardView() {
     ])
   ]));
 
-  // ---------- Summary Grid ----------
   const summary = el("div", { class: "summary-grid", "data-testid": "dashboard-summary" });
   page.appendChild(summary);
 
-  // ---------- Recent Activity Cards ----------
   const recentWrap = el("div", { class: "two-col" });
   const recentAdmissions = card("Recent Admissions", "Latest students added");
   const recentFees = card("Recent Fee Payments", "Last collections");
   const recentSalaries = card("Recent Salary Payments", "Last payouts");
-
   page.appendChild(recentWrap);
   recentWrap.appendChild(recentAdmissions.wrap);
   recentWrap.appendChild(recentFees.wrap);
   page.appendChild(recentSalaries.wrap);
 
-  // Show loading states
   recentAdmissions.body.appendChild(loadingState("Loading students…"));
   recentFees.body.appendChild(loadingState("Loading fees…"));
   recentSalaries.body.appendChild(loadingState("Loading salary…"));
 
-  // ---------- Data State ----------
   let students = [], teachers = [], fees = [], salaries = [];
 
-  // ---------- Subscriptions ----------
   const unsubs = [
     subscribeStudents((v) => { students = v || []; render(); }),
     subscribeTeachers((v) => { teachers = v || []; render(); }),
@@ -48,34 +42,24 @@ export function DashboardView() {
 
   page.addEventListener("view:unmount", () => unsubs.forEach(u => u && u()));
 
-  // ---------- Render Function ----------
   function render() {
     const today = new Date();
     const y = today.getFullYear(), m = today.getMonth();
-
-    // Monthly fees
     const monthFees = fees.filter(f => {
-      const d = f.date ? new Date(f.date) : null;
-      return d && d.getFullYear() === y && d.getMonth() === m;
+      const d = f.date ? new Date(f.date) : null; return d && d.getFullYear() === y && d.getMonth() === m;
     });
-    // Today's fees
     const todayFees = fees.filter(f => {
-      const d = f.date ? new Date(f.date) : null;
-      return d && d.toDateString() === today.toDateString();
+      const d = f.date ? new Date(f.date) : null; return d && d.toDateString() === today.toDateString();
     });
-    // Monthly salaries paid
     const monthSalPaid = salaries.filter(s => {
-      const d = s.date ? new Date(s.date) : null;
-      return d && d.getFullYear() === y && d.getMonth() === m;
+      const d = s.date ? new Date(s.date) : null; return d && d.getFullYear() === y && d.getMonth() === m;
     });
-
     const totalCollection = monthFees.reduce((a, b) => a + Number(b.amount || 0), 0);
     const todayCollection = todayFees.reduce((a, b) => a + Number(b.amount || 0), 0);
     const pendingFees = fees.filter(f => (f.balance || 0) > 0).reduce((a, b) => a + Number(b.balance || 0), 0);
     const totalSalPaid = monthSalPaid.filter(s => s.status !== "Pending").reduce((a, b) => a + Number(b.amount || 0), 0);
     const pendingSalary = salaries.filter(s => s.status === "Pending").reduce((a, b) => a + Number(b.amount || 0), 0);
 
-    // Build summary stats
     summary.innerHTML = "";
     [
       { label: "Total Students", value: students.length, icon: ICON.users, tone: "" },
@@ -88,33 +72,23 @@ export function DashboardView() {
       { label: "Total Fee Records", value: fees.length, icon: ICON.inbox, tone: "" }
     ].forEach(s => summary.appendChild(stat(s)));
 
-    // Fill recent cards
     fillRecent(recentAdmissions.body, students.slice(0, 6), r => ({
-      title: r.name,
-      sub: `${r.class || "—"} · ${r.section || "—"} · Adm #${r.admissionNumber || "—"}`,
-      side: fmtDate(r.admissionDate || r.createdAt),
-      avatar: r
+      title: r.name, sub: `${r.class || "—"} · ${r.section || "—"} · Adm #${r.admissionNumber || "—"}`,
+      side: fmtDate(r.admissionDate || r.createdAt), avatar: r
     }));
-
     fillRecent(recentFees.body, fees.slice(0, 6), r => ({
-      title: r.studentName || "—",
-      sub: `${r.feeType || "Fee"} · Receipt #${r.receiptNumber}`,
-      side: fmtCurrency(r.amount),
-      avatar: { name: r.studentName }
+      title: r.studentName || "—", sub: `${r.feeType || "Fee"} · Receipt #${r.receiptNumber}`,
+      side: fmtCurrency(r.amount), avatar: { name: r.studentName }
     }));
-
     fillRecent(recentSalaries.body, salaries.slice(0, 6), r => ({
-      title: r.teacherName || "—",
-      sub: `${r.month || ""} · Receipt #${r.receiptNumber}`,
-      side: fmtCurrency(r.amount),
-      avatar: { name: r.teacherName }
+      title: r.teacherName || "—", sub: `${r.month || ""} · Receipt #${r.receiptNumber}`,
+      side: fmtCurrency(r.amount), avatar: { name: r.teacherName }
     }));
   }
 
   return page;
 }
 
-// ---------- Helper: Card ----------
 function card(title, subtitle) {
   const body = el("div", { class: "card-body" });
   const wrap = el("div", { class: "card" }, [
@@ -129,7 +103,6 @@ function card(title, subtitle) {
   return { wrap, body };
 }
 
-// ---------- Helper: Stat ----------
 function stat({ label, value, icon, tone = "", foot = "" }) {
   return el("div", { class: "stat" }, [
     el("div", { class: "stat-top" }, [
@@ -141,7 +114,6 @@ function stat({ label, value, icon, tone = "", foot = "" }) {
   ]);
 }
 
-// ---------- Helper: Fill Recent ----------
 function fillRecent(container, rows, mapper) {
   container.innerHTML = "";
   if (!rows.length) {
@@ -167,7 +139,6 @@ function fillRecent(container, rows, mapper) {
   container.appendChild(list);
 }
 
-// ---------- Helper: Avatar ----------
 function avatarNode(o = {}) {
   const av = el("div", { class: "avatar" });
   if (o.photoUrl) av.appendChild(el("img", { src: o.photoUrl, alt: "" }));
