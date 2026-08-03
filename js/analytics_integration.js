@@ -1,8 +1,8 @@
-// Standalone Analytics Integration – No app.js editing required
+// Standalone Analytics Integration – Safe, Non‑blocking
 import { AnalyticsView } from "./views/analytics.js";
 
 (function() {
-  // ----- 1. Inject sidebar link -----
+  // 1. Inject sidebar link
   const sidebarNav = document.getElementById("sidebar-nav");
   if (sidebarNav) {
     const existingLink = sidebarNav.querySelector('[data-route="analytics"]');
@@ -24,16 +24,11 @@ import { AnalyticsView } from "./views/analytics.js";
     }
   }
 
-  // ----- 2. Route handling -----
-  function parseHash() {
+  // 2. Render only when route is analytics
+  function renderAnalytics() {
     const raw = (location.hash || "#/dashboard").replace(/^#\/?/, "");
     const [pathRaw] = raw.split("?");
-    const parts = pathRaw.split("/").filter(Boolean);
-    return { route: parts[0] || "dashboard", id: parts[1] || null };
-  }
-
-  function renderAnalytics() {
-    const { route } = parseHash();
+    const route = pathRaw.split("/").filter(Boolean)[0] || "dashboard";
     if (route === "analytics") {
       const page = document.getElementById("page");
       if (page) {
@@ -52,22 +47,14 @@ import { AnalyticsView } from "./views/analytics.js";
     return false;
   }
 
-  // ----- 3. Intercept hash changes (capture phase, BEFORE app.js) -----
-  window.addEventListener("hashchange", function(e) {
-    if (renderAnalytics()) {
-      e.stopImmediatePropagation();
-      e.stopPropagation();
-    }
-  }, true);
+  // 3. Listen to hash changes (non‑blocking)
+  window.addEventListener("hashchange", function() {
+    // Let app.js render first, then override if needed
+    setTimeout(() => renderAnalytics(), 10);
+  });
 
-  // ----- 4. Handle initial load (if URL is already #/analytics) -----
-  // Use a small delay to ensure app.js has mounted the first view.
+  // 4. On initial load, if hash is analytics, render it after app.js
   window.addEventListener("DOMContentLoaded", function() {
-    setTimeout(() => {
-      // Only override if the current hash is analytics
-      if (parseHash().route === "analytics") {
-        renderAnalytics();
-      }
-    }, 50);
+    setTimeout(() => renderAnalytics(), 50);
   });
 })();
