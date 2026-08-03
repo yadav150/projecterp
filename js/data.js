@@ -1,4 +1,4 @@
-// Data layer using Realtime Database
+// Data layer using Realtime Database — complete with teacher sub‑data
 import {
   db, PATH, dbRef, push, set, update, remove, get, onValue,
   nextCounter, uploadPhoto
@@ -109,3 +109,80 @@ export async function recordSalaryPayment(payload) {
 export async function deleteSalary(id) { await remove(dbRef(db, `${PATH.salaries}/${id}`)); }
 export async function getSalary(id) { return getById(PATH.salaries, id); }
 export function subscribeSalaries(cb) { return subscribeCollection(PATH.salaries, cb); }
+
+// ================================================================
+//  TEACHER SUB‑DATA: Attendance, Subjects, Experience, Salary
+// ================================================================
+
+// ---------- Attendance ----------
+// Stores as { date: "present" | "absent" } under teacher/{id}/attendance
+export async function updateTeacherAttendance(teacherId, date, status) {
+  const ref = dbRef(db, `${PATH.teachers}/${teacherId}/attendance/${date}`);
+  await set(ref, status);
+}
+
+export async function getTeacherAttendance(teacherId) {
+  const ref = dbRef(db, `${PATH.teachers}/${teacherId}/attendance`);
+  const snap = await get(ref);
+  return snap.exists() ? snap.val() : {};
+}
+
+// ---------- Subjects ----------
+// Stores as array of strings under teacher/{id}/subjects
+export async function setTeacherSubjects(teacherId, subjects) {
+  const ref = dbRef(db, `${PATH.teachers}/${teacherId}/subjects`);
+  await set(ref, subjects);
+}
+
+export async function addTeacherSubject(teacherId, subject) {
+  const ref = dbRef(db, `${PATH.teachers}/${teacherId}/subjects`);
+  const snap = await get(ref);
+  const current = snap.exists() ? snap.val() : [];
+  if (!current.includes(subject)) {
+    current.push(subject);
+    await set(ref, current);
+  }
+}
+
+export async function removeTeacherSubject(teacherId, subject) {
+  const ref = dbRef(db, `${PATH.teachers}/${teacherId}/subjects`);
+  const snap = await get(ref);
+  const current = snap.exists() ? snap.val() : [];
+  const updated = current.filter(s => s !== subject);
+  await set(ref, updated);
+}
+
+// ---------- Experience ----------
+// Stores as array of objects under teacher/{id}/experience
+export async function addTeacherExperience(teacherId, exp) {
+  const ref = dbRef(db, `${PATH.teachers}/${teacherId}/experience`);
+  const snap = await get(ref);
+  const current = snap.exists() ? snap.val() : [];
+  current.push({ id: Date.now(), ...exp }); // unique id
+  await set(ref, current);
+}
+
+export async function updateTeacherExperience(teacherId, expId, updatedExp) {
+  const ref = dbRef(db, `${PATH.teachers}/${teacherId}/experience`);
+  const snap = await get(ref);
+  const current = snap.exists() ? snap.val() : [];
+  const index = current.findIndex(e => e.id === expId);
+  if (index !== -1) {
+    current[index] = { ...current[index], ...updatedExp };
+    await set(ref, current);
+  }
+}
+
+export async function removeTeacherExperience(teacherId, expId) {
+  const ref = dbRef(db, `${PATH.teachers}/${teacherId}/experience`);
+  const snap = await get(ref);
+  const current = snap.exists() ? snap.val() : [];
+  const updated = current.filter(e => e.id !== expId);
+  await set(ref, updated);
+}
+
+// ---------- Salary (quick update) ----------
+export async function updateTeacherSalary(teacherId, salary) {
+  const ref = dbRef(db, `${PATH.teachers}/${teacherId}`);
+  await update(ref, { salary: Number(salary) });
+}
