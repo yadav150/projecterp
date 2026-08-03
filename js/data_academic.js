@@ -1,4 +1,4 @@
-// Data layer for Academic features: attendance, exams, timetable, student records
+// Data layer for Academic features: student records, attendance, examinations, marks
 import { db, PATH, dbRef, push, set, update, remove, get, onValue, nextCounter } from "./firebase.js";
 
 function nowMs() { return Date.now(); }
@@ -116,38 +116,9 @@ export async function getStudentMarks(studentId) {
   return result;
 }
 
-// ---------- Timetable ----------
-export async function setTimetable(classId, day, period, data) {
-  const ref = dbRef(db, `${PATH.timetable}/${classId}/${day}/${period}`);
-  await set(ref, data);
-}
-export async function getTimetable(classId) {
-  const ref = dbRef(db, `${PATH.timetable}/${classId}`);
-  const snap = await get(ref);
-  return snap.exists() ? snap.val() : {};
-}
-export async function getAllTimetables() {
-  const ref = dbRef(db, `${PATH.timetable}`);
-  const snap = await get(ref);
-  return snap.exists() ? snap.val() : {};
-}
-export function subscribeTimetable(classId, cb) {
-  const ref = dbRef(db, `${PATH.timetable}/${classId}`);
-  return onValue(ref, (snap) => {
-    const val = snap.val() || {};
-    cb(val);
-  }, (err) => cb({}, err));
-}
-export async function deleteTimetable(classId, day, period) {
-  const ref = dbRef(db, `${PATH.timetable}/${classId}/${day}/${period}`);
-  await remove(ref);
-}
-
 // ---------- Notification (Simulated) ----------
 export async function sendAttendanceAlert(parentPhone, studentName, date) {
   // In production, this would call an SMS/email API.
-  // For now, log to console and show a toast.
   console.log(`Alert: ${studentName} was absent on ${date}. Notifying ${parentPhone}`);
-  // Return a dummy success
   return { success: true, message: `Alert sent for ${studentName}` };
 }
