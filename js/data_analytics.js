@@ -1,5 +1,5 @@
 // Data layer for Essential Analytics (FLN, Skills, Behavioral, Parent Engagement, Sibling/Fee)
-import { db, PATH, dbRef, push, set, update, remove, get, onValue, nextCounter } from "./firebase.js";
+import { db, dbRef, push, set, update, remove, get, onValue, nextCounter } from "./firebase.js";
 
 function nowMs() { return Date.now(); }
 async function getById(path, id) {
@@ -21,91 +21,91 @@ function subscribeCollection(path, cb) {
   return off;
 }
 
+// ---------- Own paths (no conflict with existing PATH) ----------
+const NS = "erp_bfa";
+const ANALYTICS_PATH = `${NS}/analytics`;
+const FAMILIES_PATH = `${NS}/families`;
+
 // ---------- FLN Tracking ----------
-// Store per student: readingLevel (Beginner/Intermediate/Advanced), mathSkills: { counting: 'Beginner', addition: 'Intermediate', ... }
 export async function setFLNData(studentId, data) {
-  const ref = dbRef(db, `${PATH.analytics}/fln/${studentId}`);
+  const ref = dbRef(db, `${ANALYTICS_PATH}/fln/${studentId}`);
   await set(ref, { ...data, updatedAt: nowMs() });
 }
 export async function getFLNData(studentId) {
-  const ref = dbRef(db, `${PATH.analytics}/fln/${studentId}`);
+  const ref = dbRef(db, `${ANALYTICS_PATH}/fln/${studentId}`);
   const snap = await get(ref);
   return snap.exists() ? snap.val() : null;
 }
 export function subscribeFLNData(cb) {
-  return subscribeCollection(`${PATH.analytics}/fln`, cb);
+  return subscribeCollection(`${ANALYTICS_PATH}/fln`, cb);
 }
 
 // ---------- Skill-Based Competency ----------
-// Store per student per subject: { subject, skills: { skillName: rating (1-5) } }
 export async function setStudentSkills(studentId, subject, skills) {
-  const ref = dbRef(db, `${PATH.analytics}/skills/${studentId}/${subject}`);
+  const ref = dbRef(db, `${ANALYTICS_PATH}/skills/${studentId}/${subject}`);
   await set(ref, { skills, updatedAt: nowMs() });
 }
 export async function getStudentSkills(studentId) {
-  const ref = dbRef(db, `${PATH.analytics}/skills/${studentId}`);
+  const ref = dbRef(db, `${ANALYTICS_PATH}/skills/${studentId}`);
   const snap = await get(ref);
   return snap.exists() ? snap.val() : {};
 }
 export function subscribeSkills(cb) {
-  return subscribeCollection(`${PATH.analytics}/skills`, cb);
+  return subscribeCollection(`${ANALYTICS_PATH}/skills`, cb);
 }
 
 // ---------- Behavioral & Micro-Attendance Trends ----------
-// Store behavioral notes per student: { date, type (participation, behavior), note, score (1-5) }
 export async function addBehavioralNote(studentId, note) {
-  const ref = dbRef(db, `${PATH.analytics}/behavior/${studentId}`);
+  const ref = dbRef(db, `${ANALYTICS_PATH}/behavior/${studentId}`);
   const snap = await get(ref);
   const current = snap.exists() ? snap.val() : [];
   current.push({ id: Date.now(), ...note, createdAt: nowMs() });
   await set(ref, current);
 }
 export async function getBehavioralNotes(studentId) {
-  const ref = dbRef(db, `${PATH.analytics}/behavior/${studentId}`);
+  const ref = dbRef(db, `${ANALYTICS_PATH}/behavior/${studentId}`);
   const snap = await get(ref);
   return snap.exists() ? snap.val() : [];
 }
 export function subscribeBehavioral(cb) {
-  return subscribeCollection(`${PATH.analytics}/behavior`, cb);
+  return subscribeCollection(`${ANALYTICS_PATH}/behavior`, cb);
 }
 
 // ---------- Parent Engagement ----------
-// Store per student: { lastLogin, noticesRead: [noticeId], homeworkChecked: [date] }
 export async function updateParentEngagement(studentId, data) {
-  const ref = dbRef(db, `${PATH.analytics}/parentEngagement/${studentId}`);
+  const ref = dbRef(db, `${ANALYTICS_PATH}/parentEngagement/${studentId}`);
   await update(ref, { ...data, updatedAt: nowMs() });
 }
 export async function getParentEngagement(studentId) {
-  const ref = dbRef(db, `${PATH.analytics}/parentEngagement/${studentId}`);
+  const ref = dbRef(db, `${ANALYTICS_PATH}/parentEngagement/${studentId}`);
   const snap = await get(ref);
   return snap.exists() ? snap.val() : {};
 }
 export function subscribeParentEngagement(cb) {
-  return subscribeCollection(`${PATH.analytics}/parentEngagement`, cb);
+  return subscribeCollection(`${ANALYTICS_PATH}/parentEngagement`, cb);
 }
 
 // ---------- Sibling & Fee Concession ----------
-// Store family groups: { familyId, siblings: [studentId], concessionPercent (0-100) }
 export async function createFamily(data) {
   const familyId = await nextCounter("familyId", "FAM-", 4);
-  const ref = dbRef(db, `${PATH.families}/${familyId}`);
+  const ref = dbRef(db, `${FAMILIES_PATH}/${familyId}`);
   await set(ref, { ...data, familyId, createdAt: nowMs() });
   return familyId;
 }
 export async function updateFamily(familyId, data) {
-  const ref = dbRef(db, `${PATH.families}/${familyId}`);
+  const ref = dbRef(db, `${FAMILIES_PATH}/${familyId}`);
   await update(ref, { ...data, updatedAt: nowMs() });
 }
 export async function getFamily(familyId) {
-  const ref = dbRef(db, `${PATH.families}/${familyId}`);
+  const ref = dbRef(db, `${FAMILIES_PATH}/${familyId}`);
   const snap = await get(ref);
   return snap.exists() ? { id: familyId, ...snap.val() } : null;
 }
 export function subscribeFamilies(cb) {
-  return subscribeCollection(PATH.families, cb);
+  return subscribeCollection(FAMILIES_PATH, cb);
 }
 export async function getAllFamilies() {
-  const ref = dbRef(db, PATH.families);
+  const ref = dbRef(db, FAMILIES_PATH);
   const snap = await get(ref);
   return snap.exists() ? snap.val() : {};
 }
