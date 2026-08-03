@@ -10,12 +10,9 @@ import { openFeeReceipt } from "./receipts.js";
 let students = [];
 let unsubS = null, unsubF = null;
 
-// ---------- Main View ----------
 export function FeesView() {
   setCrumbs([{ label: "Fee Management" }]);
   const page = el("div", { "data-testid": "fees-view" });
-
-  // Header
   page.appendChild(el("div", { class: "page-header" }, [
     el("div", {}, [
       el("h1", { class: "page-title", text: "Fee Management" }),
@@ -26,16 +23,10 @@ export function FeesView() {
     ])
   ]));
 
-  // Stats
-  const stats = el("div", { class: "summary-grid" });
-  page.appendChild(stats);
-
-  // Table mount
-  const mount = el("div");
-  page.appendChild(mount);
+  const stats = el("div", { class: "summary-grid" }); page.appendChild(stats);
+  const mount = el("div"); page.appendChild(mount);
   mount.appendChild(loadingState("Loading fees…"));
 
-  // Filters
   const classSel = el("select", { class: "select" }, [
     el("option", { value: "", text: "All Classes" }),
     ...CLASSES.map(c => el("option", { value: c, text: c }))
@@ -48,11 +39,9 @@ export function FeesView() {
   ]);
   const dateFrom = el("input", { type: "date", class: "input", style: "max-width:170px;" });
   const dateTo = el("input", { type: "date", class: "input", style: "max-width:170px;" });
-
   [classSel, statusSel, dateFrom, dateTo].forEach(x => x.addEventListener("change", () => table && table.setRows(filtered())));
 
   let table = null, rows = [];
-
   function filtered() {
     return rows.filter(r => {
       if (classSel.value && r.class !== classSel.value) return false;
@@ -63,22 +52,16 @@ export function FeesView() {
     });
   }
 
-  // Subscribe to students (for fee collection dropdown)
-  unsubS && unsubS();
-  unsubS = subscribeStudents(v => { students = v || []; });
-
-  // Subscribe to fees
+  unsubS && unsubS(); unsubS = subscribeStudents(v => { students = v || []; });
   unsubF && unsubF();
   unsubF = subscribeFees((list) => {
     rows = list;
-
-    // Stats
+    // stats
     const total = rows.reduce((a, b) => a + Number(b.amount || 0), 0);
     const paid = rows.filter(r => r.status !== "Pending").reduce((a, b) => a + Number(b.amount || 0), 0);
     const pending = rows.reduce((a, b) => a + Number(b.balance || 0), 0);
     const today = todayISO();
     const todayColl = rows.filter(r => r.date === today).reduce((a, b) => a + Number(b.amount || 0), 0);
-
     stats.innerHTML = "";
     [
       { l: "Total Collected", v: fmtCurrency(paid), icon: ICON.money, tone: "green" },
@@ -90,46 +73,29 @@ export function FeesView() {
       el("div", { class: "stat-value", text: String(s.v) })
     ])));
 
-    // Table
     mount.innerHTML = "";
     table = DataTable({
       testId: "fees-table",
       columns: [
         { key: "receiptNumber", label: "Receipt #", sortable: true, render: r => r.receiptNumber || "—" },
-        {
-          key: "studentName", label: "Student", sortable: true,
-          render: r => el("div", {}, [
-            el("div", { style: "font-weight:600;", text: r.studentName || "—" }),
-            el("div", { style: "font-size:12px;color:var(--muted);", text: `Adm #${r.admissionNumber || "—"}` })
-          ])
-        },
+        { key: "studentName", label: "Student", sortable: true, render: r => el("div", {}, [
+          el("div", { style: "font-weight:600;", text: r.studentName || "—" }),
+          el("div", { style: "font-size:12px;color:var(--muted);", text: `Adm #${r.admissionNumber || "—"}` })
+        ]) },
         { key: "class", label: "Class", sortable: true, render: r => `${r.class || "—"} ${r.section ? "· " + r.section : ""}` },
         { key: "feeType", label: "Fee Type", render: r => r.feeType || "—" },
         { key: "amount", label: "Amount", sortable: true, render: r => fmtCurrency(r.amount) },
-        {
-          key: "balance", label: "Balance", sortable: true,
-          render: r => `<span style="color:${(r.balance || 0) > 0 ? "var(--danger)" : "var(--muted)"}">${fmtCurrency(r.balance || 0)}</span>`
-        },
+        { key: "balance", label: "Balance", sortable: true, render: r => `<span style="color:${(r.balance || 0) > 0 ? "var(--danger)" : "var(--muted)"}">${fmtCurrency(r.balance || 0)}</span>` },
         { key: "date", label: "Date", sortable: true, render: r => fmtDate(r.date) },
-        {
-          key: "status", label: "Status",
-          render: r => `<span class="badge ${r.status === "Paid" ? "green" : r.status === "Partial" ? "amber" : "red"}">${r.status || "Paid"}</span>`
-        },
-        {
-          key: "_", label: "",
-          render: r => rowActions([
-            { icon: ICON.receipt, testId: `frec-${r.id}`, onClick: () => openFeeReceipt(r), label: "Receipt" },
-            {
-              icon: ICON.trash, danger: true, testId: `fdel-${r.id}`,
-              onClick: async () => {
-                if (await confirmDialog({ title: "Delete this fee record?", message: "This action cannot be undone." })) {
-                  await deleteFee(r.id);
-                  toast({ type: "success", title: "Record deleted" });
-                }
-              }, label: "Delete"
+        { key: "status", label: "Status", render: r => `<span class="badge ${r.status === "Paid" ? "green" : r.status === "Partial" ? "amber" : "red"}">${r.status || "Paid"}</span>` },
+        { key: "_", label: "", render: r => rowActions([
+          { icon: ICON.receipt, testId: `frec-${r.id}`, onClick: () => openFeeReceipt(r), label: "Receipt" },
+          { icon: ICON.trash, danger: true, testId: `fdel-${r.id}`, onClick: async () => {
+            if (await confirmDialog({ title: "Delete this fee record?", message: "This action cannot be undone." })) {
+              await deleteFee(r.id); toast({ type: "success", title: "Record deleted" });
             }
-          ])
-        }
+          }, label: "Delete" }
+        ]) }
       ],
       rows: filtered(),
       searchFields: ["studentName", "receiptNumber", "admissionNumber", "feeType", "paymentMode"],
@@ -141,40 +107,25 @@ export function FeesView() {
   });
 
   page.addEventListener("view:unmount", () => {
-    unsubS && unsubS();
-    unsubF && unsubF();
-    unsubS = null;
-    unsubF = null;
+    unsubS && unsubS(); unsubF && unsubF(); unsubS = null; unsubF = null;
   });
-
   return page;
 }
 
-// ---------- Helpers ----------
 function rowActions(items) {
   const wrap = el("div", { class: "row-actions" });
   items.forEach(it => {
     const b = el("button", { class: `icon-btn-sm ${it.danger ? "danger" : ""}`, title: it.label, "data-testid": it.testId, html: it.icon });
-    b.onclick = it.onClick;
-    wrap.appendChild(b);
+    b.onclick = it.onClick; wrap.appendChild(b);
   });
   return wrap;
 }
 
-function field(label, node) {
-  return el("div", { class: "form-row" }, [
-    el("label", { html: label }),
-    node
-  ]);
-}
-
-// ---------- Collect Fee Modal ----------
 function openCollectFee() {
   if (!students.length) {
     toast({ type: "error", title: "No students", message: "Please add at least one student first." });
     return;
   }
-
   const body = el("div");
 
   const studentSel = el("select", { class: "select", "data-testid": "fee-student" });
@@ -210,24 +161,18 @@ function openCollectFee() {
   const cancel = el("button", { class: "btn btn-outline", text: "Cancel" });
   const save = el("button", { class: "btn btn-primary", "data-testid": "save-fee-btn", text: "Record Payment" });
   const m = openModal({ title: "Collect Fee Payment", body, footer: [cancel, save], size: "large" });
-
   cancel.onclick = () => m.close();
-
   save.onclick = async () => {
     const stu = students.find(s => s.id === studentSel.value);
     if (!stu) { toast({ type: "error", title: "Please select a student" }); return; }
     if (!feeType.value) { toast({ type: "error", title: "Select fee type" }); return; }
-    const amt = Number(amount.value) || 0;
-    const paid = Number(paidAmt.value) || 0;
+    const amt = Number(amount.value) || 0, paid = Number(paidAmt.value) || 0;
     if (amt <= 0) { toast({ type: "error", title: "Enter a valid amount" }); return; }
     if (paid < 0 || paid > amt) { toast({ type: "error", title: "Paid must be between 0 and amount due" }); return; }
     if (!mode.value) { toast({ type: "error", title: "Select payment mode" }); return; }
-
     const balance = amt - paid;
     const status = balance <= 0 ? "Paid" : (paid === 0 ? "Pending" : "Partial");
-
-    save.disabled = true;
-    save.textContent = "Saving…";
+    save.disabled = true; save.textContent = "Saving…";
     try {
       const created = await recordFeePayment({
         studentId: stu.id,
@@ -250,8 +195,14 @@ function openCollectFee() {
       openFeeReceipt(created);
     } catch (e) {
       toast({ type: "error", title: "Failed to record", message: e.message });
-      save.disabled = false;
-      save.textContent = "Record Payment";
+      save.disabled = false; save.textContent = "Record Payment";
     }
   };
+}
+
+function field(label, node) {
+  return el("div", { class: "form-row" }, [
+    el("label", { html: label }),
+    node
+  ]);
 }
