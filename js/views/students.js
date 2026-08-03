@@ -34,6 +34,9 @@ export function StudentsView({ id } = {}) {
   listMount.appendChild(loadingState("Loading students…"));
 
   let rows = [];
+  let filterClass = "";
+  let filterSection = "";
+  let filterStatus = "";
   let table = null;
 
   const classSel = el("select", { class: "select", "data-testid": "filter-class" }, [
