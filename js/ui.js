@@ -46,6 +46,7 @@ export function openModal({ title = "", body, footer = null, size = "" } = {}) {
   return { close, modal, body: bodyWrap };
 }
 
+// ---------- Confirm Dialog ----------
 export function confirmDialog({ title = "Are you sure?", message = "", confirmText = "Confirm", danger = true } = {}) {
   return new Promise((resolve) => {
     const body = el("div", { style: "text-align:center; padding:8px 4px 4px;" }, [
@@ -97,7 +98,7 @@ export function setCrumbs(items) {
   });
 }
 
-// ---------- Data table with search/sort/pagination ----------
+// ---------- Data Table ----------
 export function DataTable({
   columns,          // [{ key, label, sortable, render(row) }]
   rows,             // data array
