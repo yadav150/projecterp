@@ -8,6 +8,12 @@ import { FeesView } from "./views/fees.js";
 import { SalaryView } from "./views/salary.js";
 import { ReceiptsView } from "./views/receipts.js";
 
+// New Academic Features
+import { StudentRecordsView } from "./views/studentRecords.js";
+import { AttendanceView } from "./views/attendance.js";
+import { ExaminationsView } from "./views/examinations.js";
+import { TimetableView } from "./views/timetable.js";
+
 const routes = {
   dashboard: () => DashboardView(),
   students: (p) => StudentsView(p),
@@ -15,7 +21,12 @@ const routes = {
   teachers: (p) => TeachersView(p),
   fees: () => FeesView(),
   salary: () => SalaryView(),
-  receipts: () => ReceiptsView()
+  receipts: () => ReceiptsView(),
+  // New routes
+  "student-records": (p) => StudentRecordsView(p),
+  attendance: () => AttendanceView(),
+  examinations: () => ExaminationsView(),
+  timetable: () => TimetableView()
 };
 
 const page = document.getElementById("page");
@@ -32,13 +43,11 @@ function render() {
   const { route, id } = parseHash();
   navItems().forEach(a => a.classList.toggle("active", a.dataset.route === route));
   const factory = routes[route] || routes.dashboard;
-  // unmount previous
   const prev = page.firstChild;
   if (prev) prev.dispatchEvent(new CustomEvent("view:unmount"));
   page.innerHTML = "";
   const node = factory({ id });
   page.appendChild(node);
-  // mobile: close sidebar after nav
   document.getElementById("sidebar").classList.remove("open");
 }
 
@@ -49,7 +58,6 @@ window.addEventListener("DOMContentLoaded", () => {
   document.getElementById("menu-btn").addEventListener("click", () => {
     document.getElementById("sidebar").classList.toggle("open");
   });
-  // Firebase status
   firebaseHealthCheck().then(ok => {
     const statusEl = document.querySelector(".fw-status");
     const txt = document.getElementById("fw-status-text");
@@ -58,7 +66,6 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-// Kick off if DOMContentLoaded already fired
 if (document.readyState !== "loading") {
   window.dispatchEvent(new Event("DOMContentLoaded"));
 }
