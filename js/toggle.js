@@ -9,18 +9,14 @@
     return;
   }
 
-  // ----- Toggle on hamburger click (capture phase) -----
+  // Toggle on hamburger click (capture phase)
   menuBtn.addEventListener("click", function(e) {
-    // Toggle the sidebar
     sidebar.classList.toggle("open");
-
-    // Prevent the existing listener in app.js from firing
     e.stopImmediatePropagation();
-    // Also stop propagation to avoid reaching outside click handler
     e.stopPropagation();
-  }, true); // true = capture phase
+  }, true);
 
-  // ----- Close sidebar when clicking outside (mobile only) -----
+  // Close sidebar when clicking outside (mobile only)
   document.addEventListener("click", function(e) {
     if (window.innerWidth < 860 && sidebar.classList.contains("open")) {
       const isClickInsideSidebar = sidebar.contains(e.target);
@@ -31,7 +27,7 @@
     }
   });
 
-  // ----- Close sidebar when resizing to desktop -----
+  // Close sidebar when resizing to desktop
   window.addEventListener("resize", function() {
     if (window.innerWidth >= 860) {
       sidebar.classList.remove("open");
