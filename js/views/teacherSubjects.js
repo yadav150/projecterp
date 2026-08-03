@@ -1,4 +1,3 @@
-// Teacher Subjects Tab
 import { el, ICON } from "../utils.js";
 import { toast, loadingState, confirmDialog } from "../ui.js";
 import { addTeacherSubject, removeTeacherSubject, getTeacher } from "../data.js";
@@ -11,14 +10,12 @@ export function renderTeacherSubjects(teacherId) {
   ]));
   const body = el("div", { class: "card-body" });
 
-  // Add subject row
   const input = el("input", { class: "input", placeholder: "Enter subject name", style: "flex:1;" });
   const addBtn = el("button", { class: "btn btn-primary", html: `${ICON.plus}<span>Add</span>` });
 
   const addRow = el("div", { style: "display:flex;gap:10px;margin-bottom:16px;" }, [input, addBtn]);
   body.appendChild(addRow);
 
-  // Subject list container
   const listContainer = el("div");
   body.appendChild(listContainer);
 
