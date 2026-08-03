@@ -8,12 +8,14 @@ import { subscribeStudents, createStudent, updateStudent, deleteStudent, getStud
 
 let unsub = null;
 
+// ---------- Main View ----------
 export function StudentsView({ id } = {}) {
   setCrumbs(id ? [{ label: "Students", href: "#/students" }, { label: "Profile" }] : [{ label: "Students" }]);
   const page = el("div", { "data-testid": "students-view" });
 
   if (id) return profilePage(id);
 
+  // Header
   page.appendChild(el("div", { class: "page-header" }, [
     el("div", {}, [
       el("h1", { class: "page-title", text: "Students" }),
@@ -29,16 +31,15 @@ export function StudentsView({ id } = {}) {
     ])
   ]));
 
+  // Mount
   const listMount = el("div");
   page.appendChild(listMount);
   listMount.appendChild(loadingState("Loading students…"));
 
   let rows = [];
-  let filterClass = "";
-  let filterSection = "";
-  let filterStatus = "";
   let table = null;
 
+  // Filters
   const classSel = el("select", { class: "select", "data-testid": "filter-class" }, [
     el("option", { value: "", text: "All Classes" }),
     ...CLASSES.map(c => el("option", { value: c, text: c }))
@@ -53,7 +54,9 @@ export function StudentsView({ id } = {}) {
     el("option", { value: "Inactive", text: "Inactive" }),
     el("option", { value: "Alumni", text: "Alumni" })
   ]);
+
   [classSel, sectionSel, statusSel].forEach(s => s.addEventListener("change", refresh));
+
   function currentFiltered() {
     return rows.filter(r =>
       (!classSel.value || r.class === classSel.value) &&
@@ -63,9 +66,14 @@ export function StudentsView({ id } = {}) {
   }
   function refresh() { if (table) table.setRows(currentFiltered()); }
 
+  // Subscribe
   unsub && unsub();
   unsub = subscribeStudents((list, err) => {
-    if (err) { listMount.innerHTML = ""; listMount.appendChild(el("div", { class: "state", text: "Failed to load students. Check Firebase rules." })); return; }
+    if (err) {
+      listMount.innerHTML = "";
+      listMount.appendChild(el("div", { class: "state", text: "Failed to load students. Check Firebase rules." }));
+      return;
+    }
     rows = list;
     listMount.innerHTML = "";
     table = DataTable({
@@ -97,7 +105,8 @@ export function StudentsView({ id } = {}) {
             { icon: ICON.edit, label: "Edit", testId: `edit-${r.id}`, onClick: () => openStudentForm({ mode: "edit", record: r }) },
             { icon: ICON.trash, label: "Delete", danger: true, testId: `del-${r.id}`, onClick: async () => {
               if (await confirmDialog({ title: "Delete this student?", message: "This action cannot be undone." })) {
-                await deleteStudent(r.id); toast({ type: "success", title: "Student deleted" });
+                await deleteStudent(r.id);
+                toast({ type: "success", title: "Student deleted" });
               }
             }}
           ])
@@ -116,6 +125,7 @@ export function StudentsView({ id } = {}) {
   return page;
 }
 
+// ---------- Helpers ----------
 function avatarNode(r) {
   const av = el("div", { class: "avatar" });
   if (r.photoUrl) av.appendChild(el("img", { src: r.photoUrl, alt: "" }));
@@ -133,6 +143,7 @@ function rowActions(items) {
   return wrap;
 }
 
+// ---------- Student Form ----------
 export function openStudentForm({ mode = "create", record = {}, onCreated } = {}) {
   const body = el("div");
   const form = studentFormFields(record);
@@ -141,6 +152,7 @@ export function openStudentForm({ mode = "create", record = {}, onCreated } = {}
   const saveBtn = el("button", { class: "btn btn-primary", "data-testid": "save-student-btn", text: mode === "create" ? "Save Student" : "Update Student" });
   const cancelBtn = el("button", { class: "btn btn-outline", text: "Cancel" });
   const m = openModal({ title: mode === "create" ? "Add Student" : "Edit Student", body, footer: [cancelBtn, saveBtn], size: "large" });
+
   cancelBtn.onclick = () => m.close();
   saveBtn.onclick = async () => {
     const data = form.getValue();
@@ -171,6 +183,7 @@ export function studentFormFields(record = {}) {
   const photoAvatar = el("div", { class: "avatar", style: "width:64px;height:64px;" });
   if (record.photoUrl) photoAvatar.appendChild(el("img", { src: record.photoUrl }));
   else photoAvatar.textContent = initials(record.name || "S");
+
   photoInput.addEventListener("change", (e) => {
     photoFile = e.target.files?.[0] || null;
     if (photoFile) {
@@ -179,6 +192,7 @@ export function studentFormFields(record = {}) {
       photoAvatar.appendChild(el("img", { src: url }));
     }
   });
+
   const photoUploader = el("div", { class: "photo-uploader" }, [
     photoAvatar,
     el("div", { style: "flex:1" }, [
@@ -217,6 +231,7 @@ export function studentFormFields(record = {}) {
   let grid = el("div", { class: "form-grid", style: "margin-top:16px;" });
   node.appendChild(grid);
   const inputs = {};
+
   fields.forEach(f => {
     if (f.section && f.section !== currentSection) {
       currentSection = f.section;
@@ -263,14 +278,25 @@ export function validateStudent(d) {
   return null;
 }
 
+// ---------- Profile Page ----------
 function profilePage(id) {
   const page = el("div", { "data-testid": "student-profile" });
   page.appendChild(loadingState("Loading student…"));
+
   getStudent(id).then(r => {
     page.innerHTML = "";
-    if (!r) { page.appendChild(el("div", { class: "state", text: "Student not found" })); return; }
+    if (!r) {
+      page.appendChild(el("div", { class: "state", text: "Student not found" }));
+      return;
+    }
+
     page.appendChild(el("div", { class: "profile-head" }, [
-      (() => { const a = el("div", { class: "avatar lg" }); if (r.photoUrl) a.appendChild(el("img", { src: r.photoUrl })); else a.textContent = initials(r.name); return a; })(),
+      (() => {
+        const a = el("div", { class: "avatar lg" });
+        if (r.photoUrl) a.appendChild(el("img", { src: r.photoUrl }));
+        else a.textContent = initials(r.name);
+        return a;
+      })(),
       el("div", { class: "meta", style: "flex:1" }, [
         el("h2", { text: r.name }),
         el("p", { text: `Class ${r.class || "—"} · Section ${r.section || "—"} · Roll ${r.rollNumber || "—"}` }),
@@ -295,6 +321,7 @@ function profilePage(id) {
       ["Category", r.category], ["Previous School", r.previousSchool],
       ["Admission Date", fmtDate(r.admissionDate)], ["Status", r.status || "Active"]
     ];
+
     const card = el("div", { class: "card" }, [
       el("div", { class: "card-header" }, [el("div", { class: "card-title", text: "Student Details" })]),
       el("div", { class: "card-body" }, [
@@ -305,5 +332,6 @@ function profilePage(id) {
     ]);
     page.appendChild(card);
   });
+
   return page;
 }
