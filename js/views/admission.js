@@ -21,6 +21,7 @@ export function AdmissionView() {
 
   const preview = el("div", { "data-testid": "admission-preview" });
 
+  // If pre‑selected student ID is present, show their admission form
   if (preselectId) {
     preview.appendChild(loadingState("Loading admission form…"));
     getStudent(preselectId).then(r => {
@@ -32,6 +33,7 @@ export function AdmissionView() {
     return page;
   }
 
+  // --- New Admission Form ---
   const formCard = el("div", { class: "card" }, [
     el("div", { class: "card-header" }, [
       el("div", {}, [
@@ -43,6 +45,7 @@ export function AdmissionView() {
   const formBody = el("div", { class: "card-body" });
   const fields = studentFormFields({});
   formBody.appendChild(fields.node);
+
   const actions = el("div", { class: "form-actions" }, [
     el("button", { class: "btn btn-outline", text: "Reset", onclick: () => location.reload() }),
     el("button", { class: "btn btn-primary", "data-testid": "submit-admission-btn", html: `${ICON.check}<span>Submit Admission</span>` })
@@ -75,10 +78,11 @@ export function AdmissionView() {
   return page;
 }
 
+// ---------- Admission Form Render ----------
 function admissionFormRender(r) {
   const wrap = el("div");
 
-  // Actions: Print only
+  // Print button only (no download)
   const actions = el("div", { class: "page-actions", style: "justify-content:flex-end;margin-bottom:12px;" }, [
     el("button", { class: "btn btn-outline", html: `${ICON.print}<span>Print</span>`, onclick: () => printNode(printable) })
   ]);
