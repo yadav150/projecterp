@@ -1,4 +1,4 @@
-// Standalone Analytics Integration – No app.js editing required
+// Standalone Analytics Integration – Non‑blocking, safe
 import { AnalyticsView } from "./views/analytics.js";
 
 (function() {
@@ -24,7 +24,7 @@ import { AnalyticsView } from "./views/analytics.js";
     }
   }
 
-  // ----- 2. Route handling -----
+  // ----- 2. Parse hash -----
   function parseHash() {
     const raw = (location.hash || "#/dashboard").replace(/^#\/?/, "");
     const [pathRaw] = raw.split("?");
@@ -32,16 +32,19 @@ import { AnalyticsView } from "./views/analytics.js";
     return { route: parts[0] || "dashboard", id: parts[1] || null };
   }
 
+  // ----- 3. Render Analytics view -----
   function renderAnalytics() {
     const { route } = parseHash();
     if (route === "analytics") {
       const page = document.getElementById("page");
       if (page) {
+        // Unmount previous view (if any)
         const prev = page.firstChild;
         if (prev) prev.dispatchEvent(new CustomEvent("view:unmount"));
         page.innerHTML = "";
         const node = AnalyticsView();
         page.appendChild(node);
+        // Update active nav
         document.querySelectorAll(".nav-item").forEach(a =>
           a.classList.toggle("active", a.dataset.route === "analytics")
         );
@@ -52,22 +55,19 @@ import { AnalyticsView } from "./views/analytics.js";
     return false;
   }
 
-  // ----- 3. Intercept hash changes (capture phase, BEFORE app.js) -----
-  window.addEventListener("hashchange", function(e) {
-    if (renderAnalytics()) {
-      e.stopImmediatePropagation();
-      e.stopPropagation();
-    }
-  }, true);
-
-  // ----- 4. Handle initial load (if URL is already #/analytics) -----
-  // Use a small delay to ensure app.js has mounted the first view.
-  window.addEventListener("DOMContentLoaded", function() {
+  // ----- 4. Hash change listener (non‑blocking) -----
+  window.addEventListener("hashchange", function() {
+    // Let app.js handle the event first, then override for analytics
     setTimeout(() => {
-      // Only override if the current hash is analytics
-      if (parseHash().route === "analytics") {
-        renderAnalytics();
-      }
+      renderAnalytics();
+    }, 10);
+  });
+
+  // ----- 5. Initial load (if hash is already analytics) -----
+  window.addEventListener("DOMContentLoaded", function() {
+    // Wait for app.js to mount the default view, then override if needed
+    setTimeout(() => {
+      renderAnalytics();
     }, 50);
   });
 })();
