@@ -3,26 +3,41 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Bright Future Academy · ERP</title>
+  <title>Morning Glory English Academy · ERP</title>
+
+  <!-- Google Fonts (Plus Jakarta Sans) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Main Stylesheet -->
   <link rel="stylesheet" href="style.css" />
+
+  <!-- PDF Libraries (loaded asynchronously) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
 </head>
 <body>
+
+  <!-- ============================== -->
+  <!--  APP ROOT                     -->
+  <!-- ============================== -->
   <div id="app-root">
+
+    <!-- ===== SIDEBAR ===== -->
     <aside class="sidebar" id="sidebar" data-testid="sidebar">
       <div class="sidebar-brand">
         <div class="brand-mark">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>
+          </svg>
         </div>
         <div class="brand-text">
-          <div class="brand-name">Bright Future</div>
+          <div class="brand-name">Morning Glory</div>
           <div class="brand-sub">Academy ERP</div>
         </div>
       </div>
+
       <nav class="sidebar-nav" id="sidebar-nav">
         <a href="#/dashboard" class="nav-item" data-route="dashboard" data-testid="nav-dashboard">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
@@ -53,6 +68,7 @@
           <span>Receipts</span>
         </a>
       </nav>
+
       <div class="sidebar-footer">
         <div class="fw-status">
           <span class="dot" id="fw-status-dot"></span>
@@ -61,7 +77,9 @@
       </div>
     </aside>
 
+    <!-- ===== MAIN CONTENT ===== -->
     <main class="main">
+      <!-- Top Bar -->
       <header class="topbar">
         <button class="icon-btn menu-btn" id="menu-btn" data-testid="menu-btn" aria-label="Toggle menu">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
@@ -75,15 +93,21 @@
         </div>
       </header>
 
+      <!-- View Mount Point -->
       <section class="page" id="page" data-testid="page"></section>
     </main>
   </div>
 
+  <!-- ============================== -->
+  <!--  MODAL & TOAST CONTAINERS      -->
+  <!-- ============================== -->
   <div class="modal-root" id="modal-root"></div>
   <div class="toast-root" id="toast-root"></div>
 
+  <!-- ============================== -->
+  <!--  JAVASCRIPT ENTRIES            -->
+  <!-- ============================== -->
   <script type="module" src="js/app.js"></script>
-<script type="module" src="js/toggle.js"></script>
-  <script type="module" src="js/views/teachers.js"></script>
+  <script type="module" src="js/toggle.js"></script>
 </body>
 </html>
