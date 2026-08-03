@@ -127,6 +127,11 @@ export async function getTeacherAttendance(teacherId) {
   return snap.exists() ? snap.val() : {};
 }
 
+export async function deleteTeacherAttendance(teacherId, date) {
+  const ref = dbRef(db, `${PATH.teachers}/${teacherId}/attendance/${date}`);
+  await remove(ref);
+}
+
 // ---------- Subjects ----------
 // Stores as array of strings under teacher/{id}/subjects
 export async function setTeacherSubjects(teacherId, subjects) {
@@ -158,7 +163,7 @@ export async function addTeacherExperience(teacherId, exp) {
   const ref = dbRef(db, `${PATH.teachers}/${teacherId}/experience`);
   const snap = await get(ref);
   const current = snap.exists() ? snap.val() : [];
-  current.push({ id: Date.now(), ...exp }); // unique id
+  current.push({ id: Date.now(), ...exp });
   await set(ref, current);
 }
 
