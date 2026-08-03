@@ -46,7 +46,6 @@ export function openModal({ title = "", body, footer = null, size = "" } = {}) {
   return { close, modal, body: bodyWrap };
 }
 
-// ---------- Confirm Dialog ----------
 export function confirmDialog({ title = "Are you sure?", message = "", confirmText = "Confirm", danger = true } = {}) {
   return new Promise((resolve) => {
     const body = el("div", { style: "text-align:center; padding:8px 4px 4px;" }, [
@@ -98,11 +97,11 @@ export function setCrumbs(items) {
   });
 }
 
-// ---------- Data Table ----------
+// ---------- Data table with search/sort/pagination ----------
 export function DataTable({
-  columns,          // [{ key, label, sortable, render(row) }]
-  rows,             // data array
-  searchFields = [], // fields to search across
+  columns,
+  rows,
+  searchFields = [],
   pageSize = 10,
   emptyTitle = "No records",
   emptySub = "Records will appear here once added.",
@@ -113,7 +112,6 @@ export function DataTable({
 
   const wrap = el("div", { "data-testid": testId });
 
-  // toolbar (search + filters)
   const bar = el("div", { class: "filter-bar" });
   const searchWrap = el("div", { class: "search-input" }, [
     el("span", { html: ICON.search }),
@@ -133,14 +131,11 @@ export function DataTable({
 
   function render() {
     box.innerHTML = "";
-    // filter
     let list = rows;
     if (state.q && searchFields.length) {
       list = list.filter(r => searchFields.some(f => textIncludes(getField(r, f), state.q)));
     }
-    // sort
     if (state.sortKey) list = sortBy(list, state.sortKey, state.sortDir);
-    // paginate
     const { rows: pageRows, page, totalPages, total, start, end } = paginate(list, state.page, state.pageSize);
 
     if (!list.length) {
@@ -187,7 +182,6 @@ export function DataTable({
     scroll.appendChild(table);
     box.appendChild(scroll);
 
-    // pagination
     const pag = el("div", { class: "pagination" });
     pag.appendChild(el("div", { text: `Showing ${start + 1}–${end} of ${total}` }));
     const ctrl = el("div", { class: "pagination-controls" });
