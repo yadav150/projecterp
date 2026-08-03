@@ -1,5 +1,5 @@
 /* ========================================
-   Bright Future Academy · ERP Stylesheet
+   Morning Glory Academy · ERP Stylesheet
    ======================================== */
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -386,6 +386,29 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
 .detail-row .k { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
 .detail-row .v { font-size: 14px; color: var(--text); font-weight: 500; margin-top: 4px; }
 
+/* ---------- Profile Tabs ---------- */
+.profile-tabs button {
+  padding: 8px 16px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s;
+}
+.profile-tabs button:hover {
+  background: var(--bg);
+}
+.profile-tabs button[data-tab]:not(.active) {
+  background: transparent;
+  color: var(--text-2);
+}
+.profile-tabs button[data-tab].active {
+  background: var(--primary);
+  color: #fff;
+}
+.tab-content {
+  padding: 4px 0;
+}
+
 /* ---------- Receipt ---------- */
 .receipt {
   background: #fff; padding: 40px; border: 1px solid var(--border);
@@ -458,28 +481,4 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
 @media (max-width: 640px) {
   .stat-value { font-size: 18px; }
   .page-header { align-items: flex-start; flex-direction: column; }
-}
-/* ---------- Profile Tabs ---------- */
-.profile-tabs button {
-  padding: 8px 16px;
-  border: 1px solid transparent;
-  border-bottom: none;
-  font-weight: 600;
-  transition: background 0.15s, color 0.15s;
-}
-.profile-tabs button:hover {
-  background: var(--bg);
-}
-.profile-tabs button[data-tab]:not(.active) {
-  background: transparent;
-  color: var(--text-2);
-}
-.profile-tabs button[data-tab].active {
-  background: var(--primary);
-  color: #fff;
-}
-
-/* Ensure tab content has proper padding */
-.tab-content {
-  padding: 4px 0;
 }
