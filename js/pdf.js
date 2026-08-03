@@ -4,61 +4,24 @@ export async function elementToPdf(node, filename = "document.pdf") {
     alert("PDF library still loading, please try again.");
     return;
   }
-
-  if (!node.isConnected) {
-    document.body.appendChild(node);
-  }
-
-  const canvas = await window.html2canvas(node, {
-    scale: 2,
-    backgroundColor: "#ffffff",
-    useCORS: true,
-    logging: false,
-    width: node.scrollWidth,
-    height: node.scrollHeight,
-    windowWidth: node.scrollWidth,
-    windowHeight: node.scrollHeight
-  });
-
+  const canvas = await window.html2canvas(node, { scale: 2, backgroundColor: "#ffffff", useCORS: true });
   const imgData = canvas.toDataURL("image/png");
   const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF({
-    orientation: "portrait",
-    unit: "mm",
-    format: "a4"
-  });
-
+  const pdf = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
   const pageWidth = pdf.internal.pageSize.getWidth();
   const pageHeight = pdf.internal.pageSize.getHeight();
-  const margin = 15;
-  const maxWidth = pageWidth - margin * 2;
-  const maxHeight = pageHeight - margin * 2;
-
-  const imgWidth = canvas.width;
-  const imgHeight = canvas.height;
-  const scaleRatio = maxWidth / imgWidth;
-  const scaledHeight = imgHeight * scaleRatio;
-
-  const totalPages = Math.max(1, Math.ceil(scaledHeight / maxHeight));
-
-  for (let i = 0; i < totalPages; i++) {
-    if (i > 0) pdf.addPage();
-
-    const offsetY = i * (maxHeight / scaleRatio);
-    const cropHeight = Math.min(imgHeight - offsetY, maxHeight / scaleRatio);
-
-    const pageCanvas = document.createElement("canvas");
-    pageCanvas.width = imgWidth;
-    pageCanvas.height = cropHeight;
-    const ctx = pageCanvas.getContext("2d");
-    ctx.drawImage(canvas, 0, offsetY, imgWidth, cropHeight, 0, 0, imgWidth, cropHeight);
-
-    const pageImgData = pageCanvas.toDataURL("image/png");
-    const pageImgWidth = maxWidth;
-    const pageImgHeight = (cropHeight / imgWidth) * maxWidth;
-    pdf.addImage(pageImgData, "PNG", margin, margin, pageImgWidth, pageImgHeight);
+  const imgWidth = pageWidth - 40;
+  const imgHeight = (canvas.height * imgWidth) / canvas.width;
+  let heightLeft = imgHeight;
+  let position = 20;
+  pdf.addImage(imgData, "PNG", 20, position, imgWidth, imgHeight);
+  heightLeft -= (pageHeight - 40);
+  while (heightLeft > 0) {
+    position = heightLeft - imgHeight + 20;
+    pdf.addPage();
+    pdf.addImage(imgData, "PNG", 20, position, imgWidth, imgHeight);
+    heightLeft -= (pageHeight - 40);
   }
-
   pdf.save(filename);
 }
 
@@ -72,8 +35,6 @@ export function printNode(node) {
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>${styles}
       body { margin: 0; padding: 20px; background:#fff; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
-      @page { size: A4; margin: 15mm; }
-      .section { break-inside: avoid; }
     </style>
     </head><body>${node.outerHTML}</body></html>
   `);
