@@ -2,7 +2,7 @@
 import { el, ICON, SCHOOL, fmtCurrency, fmtDate } from "../utils.js";
 import { setCrumbs, openModal, loadingState, DataTable } from "../ui.js";
 import { subscribeFees, subscribeSalaries } from "../data.js";
-import { printNode } from "../pdf.js";
+import { elementToPdf, printNode } from "../pdf.js";
 
 export function ReceiptsView() {
   setCrumbs([{ label: "Receipts" }]);
@@ -10,7 +10,7 @@ export function ReceiptsView() {
   page.appendChild(el("div", { class: "page-header" }, [
     el("div", {}, [
       el("h1", { class: "page-title", text: "Receipts" }),
-      el("p", { class: "page-subtitle", text: "Browse fee and salary receipts. Print any receipt directly." })
+      el("p", { class: "page-subtitle", text: "Browse fee and salary receipts. Print or download any receipt as PDF." })
     ])
   ]));
 
@@ -111,7 +111,7 @@ export function openFeeReceipt(r) {
     balance: Number(r.balance) || 0,
     remarks: r.remarks
   });
-  openReceiptModal("Fee Receipt", node);
+  openReceiptModal("Fee Receipt", node, `FeeReceipt_${r.receiptNumber}.pdf`);
 }
 
 export function openSalaryReceipt(r) {
@@ -137,36 +137,22 @@ export function openSalaryReceipt(r) {
     balance: r.status === "Paid" ? 0 : net,
     remarks: ""
   });
-  openReceiptModal("Salary Slip", node);
+  openReceiptModal("Salary Slip", node, `SalarySlip_${r.receiptNumber}.pdf`);
 }
 
-// ---------- Modal with horizontal scroll and Print only ----------
-function openReceiptModal(title, node) {
-  const scrollWrapper = el("div", {
-    style: "overflow-x: auto; width: 100%; padding: 8px 0;"
-  });
-  scrollWrapper.appendChild(node);
-
-  const printBtn = el("button", {
-    class: "btn btn-outline",
-    html: `${ICON.print}<span>Print</span>`
-  });
+function openReceiptModal(title, node, filename) {
+  const body = el("div"); body.appendChild(node);
+  const printBtn = el("button", { class: "btn btn-outline", html: `${ICON.print}<span>Print</span>` });
+  const pdfBtn = el("button", { class: "btn btn-primary", "data-testid": "download-receipt", html: `${ICON.download}<span>Download PDF</span>` });
   const closeBtn = el("button", { class: "btn btn-ghost", text: "Close" });
-
-  const m = openModal({
-    title,
-    body: scrollWrapper,
-    footer: [closeBtn, printBtn],
-    size: "large"
-  });
-
+  const m = openModal({ title, body, footer: [closeBtn, printBtn, pdfBtn], size: "large" });
   closeBtn.onclick = () => m.close();
   printBtn.onclick = () => printNode(node);
+  pdfBtn.onclick = () => elementToPdf(node, filename);
 }
 
-// ---------- Receipt HTML renderer (with forced 2‑column grid) ----------
 function renderReceipt({ kind, number, date, parties, lines, totalDue, paid, balance, remarks }) {
-  const wrap = el("div", { class: "receipt print-area", "data-testid": "receipt", style: "max-width: 100%;" });
+  const wrap = el("div", { class: "receipt print-area", "data-testid": "receipt" });
   wrap.appendChild(el("div", { class: "receipt-head" }, [
     el("div", { class: "receipt-brand" }, [
       el("div", { class: "logo", html: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>` }),
@@ -183,11 +169,9 @@ function renderReceipt({ kind, number, date, parties, lines, totalDue, paid, bal
     ])
   ]));
 
-  const gridStyle = "display: grid; grid-template-columns: repeat(2, 1fr) !important; gap: 8px 24px; font-size: 13px;";
-
   wrap.appendChild(el("div", { class: "receipt-section" }, [
     el("h4", { text: "Details" }),
-    el("div", { class: "receipt-info-grid", style: gridStyle }, parties.map(([k, v]) => el("div", {}, [
+    el("div", { class: "receipt-info-grid" }, parties.map(([k, v]) => el("div", {}, [
       el("span", { class: "k", text: k }), el("span", { class: "v", text: v || "—" })
     ])))
   ]));
