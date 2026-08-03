@@ -1,5 +1,5 @@
-// PDF utilities — generates a true digital PDF with selectable text
-// Uses image capture for visual fidelity + invisible text overlay for selectability
+// PDF utilities — uses jsPDF + html2canvas for PDF download
+// Print function is robust and handles complex layouts
 
 export async function elementToPdf(node, filename = "document.pdf") {
   if (!window.html2canvas || !window.jspdf) {
@@ -7,12 +7,10 @@ export async function elementToPdf(node, filename = "document.pdf") {
     return;
   }
 
-  // Ensure the node is in the DOM for accurate measurement
   if (!node.isConnected) {
     document.body.appendChild(node);
   }
 
-  // 1. Capture the receipt as a high-resolution image
   const canvas = await window.html2canvas(node, {
     scale: 2,
     backgroundColor: "#ffffff",
@@ -24,10 +22,7 @@ export async function elementToPdf(node, filename = "document.pdf") {
     windowHeight: node.scrollHeight
   });
 
-  // 2. Extract all text nodes with their bounding rectangles
-  const textNodes = getTextNodes(node);
-
-  // 3. Prepare jsPDF with A4 and margins
+  const imgData = canvas.toDataURL("image/png");
   const { jsPDF } = window.jspdf;
   const pdf = new jsPDF({
     orientation: "portrait",
@@ -41,127 +36,150 @@ export async function elementToPdf(node, filename = "document.pdf") {
   const maxWidth = pageWidth - margin * 2;
   const maxHeight = pageHeight - margin * 2;
 
-  // 4. Calculate scale to fit the receipt within the page width
   const imgWidth = canvas.width;
   const imgHeight = canvas.height;
-  const scale = maxWidth / imgWidth;
-  const scaledHeight = imgHeight * scale;
+  const scaleRatio = maxWidth / imgWidth;
+  const scaledHeight = imgHeight * scaleRatio;
 
-  // 5. If the receipt fits in one page, add it; else split across pages
-  const totalHeight = scaledHeight;
-  const pageContentHeight = maxHeight;
-  const numPages = Math.max(1, Math.ceil(totalHeight / pageContentHeight));
+  // If content fits in one page, add it; else split
+  const totalPages = Math.max(1, Math.ceil(scaledHeight / maxHeight));
 
-  for (let pageIndex = 0; pageIndex < numPages; pageIndex++) {
-    if (pageIndex > 0) {
-      pdf.addPage();
-    }
+  for (let i = 0; i < totalPages; i++) {
+    if (i > 0) pdf.addPage();
 
-    // Calculate the vertical offset for cropping (in image pixels)
-    const offsetY = pageIndex * (pageContentHeight / scale);
-    const cropHeight = Math.min(imgHeight - offsetY, pageContentHeight / scale);
+    const offsetY = i * (maxHeight / scaleRatio);
+    const cropHeight = Math.min(imgHeight - offsetY, maxHeight / scaleRatio);
 
-    // Create a cropped canvas for this page
     const pageCanvas = document.createElement("canvas");
     pageCanvas.width = imgWidth;
     pageCanvas.height = cropHeight;
     const ctx = pageCanvas.getContext("2d");
     ctx.drawImage(canvas, 0, offsetY, imgWidth, cropHeight, 0, 0, imgWidth, cropHeight);
 
-    // Add the cropped image to the PDF
-    const imgData = pageCanvas.toDataURL("image/png");
+    const pageImgData = pageCanvas.toDataURL("image/png");
     const pageImgWidth = maxWidth;
     const pageImgHeight = (cropHeight / imgWidth) * maxWidth;
-    pdf.addImage(imgData, "PNG", margin, margin, pageImgWidth, pageImgHeight);
-
-    // Add invisible text overlay for this page
-    const pageStartY = offsetY;
-    const pageEndY = offsetY + cropHeight;
-
-    // Filter text nodes that fall within this page's vertical range
-    const pageTextNodes = textNodes.filter(tn => {
-      const rect = tn.rect;
-      const centerY = rect.top + rect.height / 2;
-      return centerY >= pageStartY && centerY <= pageEndY;
-    });
-
-    // Set text rendering mode to invisible (mode 3)
-    pdf.setTextRenderingMode(3);
-    pdf.setFont("helvetica", "normal");
-
-    for (const tn of pageTextNodes) {
-      const rect = tn.rect;
-      // Calculate position relative to the page (in mm)
-      const x = margin + (rect.left / imgWidth) * maxWidth;
-      const y = margin + ((rect.top - offsetY) / imgWidth) * maxWidth + (rect.height / imgWidth) * maxWidth;
-      // Determine font size (approximate from height)
-      const fontSize = (rect.height / imgWidth) * maxWidth * 0.7; // adjust factor
-      pdf.setFontSize(Math.max(fontSize, 6)); // min 6pt
-      pdf.text(tn.text, x, y);
-    }
+    pdf.addImage(pageImgData, "PNG", margin, margin, pageImgWidth, pageImgHeight);
   }
 
-  // 6. Save the PDF
   pdf.save(filename);
 }
 
-/**
- * Recursively extract all text nodes with their bounding rectangles
- * relative to the container node.
- */
-function getTextNodes(container) {
-  const result = [];
-  const walker = document.createTreeWalker(
-    container,
-    NodeFilter.SHOW_TEXT,
-    {
-      acceptNode: function(node) {
-        const text = node.textContent.trim();
-        if (text.length === 0) return NodeFilter.FILTER_REJECT;
-        return NodeFilter.FILTER_ACCEPT;
+// ----- Improved Print Function -----
+export function printNode(node) {
+  // Clone the node deeply to avoid modifying the original
+  const clone = node.cloneNode(true);
+  
+  // Ensure the clone has all styles applied – we need to re-apply any inline styles
+  // but cloneNode copies inline styles automatically.
+
+  // Create a print window
+  const printWin = window.open("", "print", "width=900,height=700");
+  if (!printWin) {
+    alert("Please allow popups for this site to print.");
+    return;
+  }
+
+  // Collect styles from the main document
+  let styles = "";
+  try {
+    // Get all stylesheets from the main document
+    const sheets = document.styleSheets;
+    for (let sheet of sheets) {
+      try {
+        const rules = sheet.cssRules || sheet.rules;
+        if (rules) {
+          for (let rule of rules) {
+            styles += rule.cssText + "\n";
+          }
+        }
+      } catch (e) {
+        // Cross-origin stylesheets may throw; ignore them
       }
     }
-  );
-
-  const containerRect = container.getBoundingClientRect();
-
-  let node;
-  while ((node = walker.nextNode())) {
-    const range = document.createRange();
-    range.selectNode(node);
-    const rects = range.getClientRects();
-    for (let rect of rects) {
-      // Convert to coordinates relative to container
-      const relative = {
-        left: rect.left - containerRect.left,
-        top: rect.top - containerRect.top,
-        width: rect.width,
-        height: rect.height
-      };
-      result.push({
-        text: node.textContent.trim(),
-        rect: relative
-      });
-    }
+  } catch (e) {
+    console.warn("Could not gather all styles", e);
   }
-  return result;
-}
 
-export function printNode(node) {
-  const printWin = window.open("", "print", "width=900,height=700");
-  const styles = Array.from(document.styleSheets).map(s => {
-    try { return Array.from(s.cssRules).map(r => r.cssText).join("\n"); } catch { return ""; }
-  }).join("\n");
-  printWin.document.write(`
-    <html><head><title>Print</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>${styles}
-      body { margin: 0; padding: 20px; background:#fff; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
-      @page { size: A4; margin: 15mm; }
-      .section { break-inside: avoid; }
-    </style>
-    </head><body>${node.outerHTML}</body></html>
-  `);
+  // Build the print document
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="UTF-8">
+        <title>Print</title>
+        <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+        <style>
+          /* Reset and base */
+          * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+          }
+          body {
+            margin: 0;
+            padding: 10px;
+            background: #fff;
+            font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          /* Ensure no overflow hidden */
+          .admission-print-form, .receipt {
+            max-width: 100% !important;
+            overflow: visible !important;
+          }
+          /* Force grid to 2 columns for admission forms */
+          .admission-print-form .info-grid {
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 4px 20px !important;
+          }
+          /* Print-specific page setup */
+          @page {
+            size: A4;
+            margin: 8mm;
+          }
+          .section {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          /* Include all main styles from the app */
+          ${styles}
+          /* Additional print optimizations */
+          .receipt {
+            padding: 20px !important;
+            border: none !important;
+            box-shadow: none !important;
+          }
+          .receipt-head {
+            border-bottom-width: 2px !important;
+          }
+          .receipt-table th, .receipt-table td {
+            border: 1px solid #e5e7eb !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .print-area {
+            visibility: visible !important;
+          }
+        </style>
+      </head>
+      <body>
+        ${clone.outerHTML}
+      </body>
+    </html>
+  `;
+
+  printWin.document.write(htmlContent);
   printWin.document.close();
-  setTimeout(() => { printWin.focus(); printWin.print(); printWin.close(); }, 400);
+
+  // Wait for fonts and rendering to complete
+  setTimeout(() => {
+    printWin.focus();
+    printWin.print();
+    // Close after print dialog (optional, may close before user confirms)
+    // We'll let the user close manually.
+  }, 600);
 }
