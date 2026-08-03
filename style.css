@@ -482,3 +482,87 @@ svg { width: 18px; height: 18px; flex-shrink: 0; }
   .stat-value { font-size: 18px; }
   .page-header { align-items: flex-start; flex-direction: column; }
 }
+/* ---------- Wizard Styles ---------- */
+.wizard-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+.wizard-steps {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  padding: 0 8px;
+  flex-wrap: wrap;
+}
+.wizard-step-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.wizard-step-dot {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--border);
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 14px;
+  transition: 0.2s;
+}
+.wizard-step-dot.active {
+  background: var(--primary);
+  color: #fff;
+}
+.wizard-step-dot.complete {
+  background: var(--success);
+  color: #fff;
+}
+.wizard-step-line {
+  flex: 1;
+  height: 2px;
+  background: var(--border);
+  min-width: 20px;
+}
+.wizard-step-line.complete {
+  background: var(--success);
+}
+.wizard-content {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.wizard-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.wizard-nav .btn {
+  min-width: 100px;
+}
+.upload-item {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.upload-item:last-child {
+  border-bottom: none;
+}
+.upload-progress-bar {
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.upload-progress-fill {
+  background: var(--primary);
+  transition: width 0.3s ease;
+}
