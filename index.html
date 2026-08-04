@@ -6,10 +6,11 @@
   <title>Janaki Professional Academy · ERP</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+  <!-- QRCode.js for admission module -->
   <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js" defer></script>
 </head>
 <body>
@@ -24,22 +25,23 @@
           <div class="brand-sub">Academy ERP</div>
         </div>
       </div>
-      <nav class="sidebar-nav" id="sidebar-nav">
-        <a href="#/dashboard" class="nav-item" data-route="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg><span>Dashboard</span></a>
-        <a href="#/students" class="nav-item" data-route="students"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Students</span></a>
-        <a href="#/admission" class="nav-item" data-route="admission"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg><span>Admission</span></a>
-        <a href="#/teachers" class="nav-item" data-route="teachers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>Teachers</span></a>
-        <a href="#/fees" class="nav-item" data-route="fees"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 10v.01M18 14v.01"/></svg><span>Fee Management</span></a>
-        <a href="#/salary" class="nav-item" data-route="salary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><span>Salary</span></a>
-        <a href="#/receipts" class="nav-item" data-route="receipts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16l4-2 4 2 4-2 4 2V8z"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="14" y2="14"/></svg><span>Receipts</span></a>
-        <a href="#/attendance" class="nav-item" data-route="attendance"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 22v-4M4 4l2.5 2.5M20 20l-2.5-2.5M4 20l2.5-2.5M20 4l-2.5 2.5M2 12h4M22 12h-4"/><circle cx="12" cy="12" r="3"/></svg><span>Attendance</span></a>
-        <a href="#/administration" class="nav-item" data-route="administration"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 22v-4M4 4l2.5 2.5M20 20l-2.5-2.5M4 20l2.5-2.5M20 4l-2.5 2.5M2 12h4M22 12h-4"/><circle cx="12" cy="12" r="3"/></svg><span>Administration</span></a>
+      <nav class="sidebar-nav">
+        <a href="#/dashboard" class="nav-item" data-route="dashboard"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg></span><span>Dashboard</span></a>
+        <a href="#/students" class="nav-item" data-route="students"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span>Students</span></a>
+        <a href="#/admission" class="nav-item" data-route="admission"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></span><span>Admission</span></a>
+        <a href="#/teachers" class="nav-item" data-route="teachers"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span>Teachers</span></a>
+        <a href="#/fees" class="nav-item" data-route="fees"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 10v.01M18 14v.01"/></svg></span><span>Fee Management</span></a>
+        <a href="#/salary" class="nav-item" data-route="salary"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span><span>Salary</span></a>
+        <a href="#/receipts" class="nav-item" data-route="receipts"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16l4-2 4 2 4-2 4 2V8z"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="14" y2="14"/></svg></span><span>Receipts</span></a>
+        <a href="#/attendance" class="nav-item" data-route="attendance"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 22v-4M4 4l2.5 2.5M20 20l-2.5-2.5M4 20l2.5-2.5M20 4l-2.5 2.5M2 12h4M22 12h-4"/><circle cx="12" cy="12" r="3"/></svg></span><span>Attendance</span></a>
+        <a href="#/administration" class="nav-item" data-route="administration"><span class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 22v-4M4 4l2.5 2.5M20 20l-2.5-2.5M4 20l2.5-2.5M20 4l-2.5 2.5M2 12h4M22 12h-4"/><circle cx="12" cy="12" r="3"/></svg></span><span>Administration</span></a>
       </nav>
       <div class="sidebar-footer">
         <div class="fw-status">
           <span class="dot" id="fw-status-dot"></span>
           <span id="fw-status-text">Connecting…</span>
         </div>
+        <div class="footer-copyright">Yadav Web Technologies</div>
       </div>
     </aside>
 
@@ -64,13 +66,9 @@
   <div class="modal-root" id="modal-root"></div>
   <div class="toast-root" id="toast-root"></div>
 
-  <!-- Footer -->
-  <footer style="text-align:center;padding:16px 0;font-size:12px;color:var(--muted);border-top:1px solid var(--border);">
-    <span>Janaki Professional Academy &bull; Developed by Yadav Web Technologies</span>
-  </footer>
-
+  <!-- Main app -->
   <script type="module" src="js/app.js"></script>
-  <!-- Admission router – separate from main router-extend -->
+  <!-- Admission router (separate) -->
   <script type="module" src="js/admission/admission-router.js"></script>
 </body>
 </html>
