@@ -1,29 +1,24 @@
-// Full app.js with all routes and error handling
-console.log("app.js loaded – full version");
+console.log("Minimal app.js – only core views");
 
-import { firebaseHealthCheck, db, dbRef, onValue } from "./firebase.js";
-
-// Import all views
+import { firebaseHealthCheck } from "./firebase.js";
 import { DashboardView } from "./views/dashboard.js";
 import { StudentsView } from "./views/students.js";
-import { AdmissionView } from "./views/admission.js";
+// import { AdmissionView } from "./views/admission.js"; // commented out
 import { TeachersView } from "./views/teachers.js";
 import { FeesView } from "./views/fees.js";
 import { SalaryView } from "./views/salary.js";
 import { ReceiptsView } from "./views/receipts.js";
 
-// Define routes
 const routes = window.__routes = {
   dashboard: () => DashboardView(),
   students: (p) => StudentsView(p),
-  admission: () => AdmissionView(),
+  // admission: () => AdmissionView(),
   teachers: (p) => TeachersView(p),
   fees: () => FeesView(),
   salary: () => SalaryView(),
   receipts: () => ReceiptsView()
 };
 
-// Apply pending routes if any
 if (window.__pendingRoutes) {
   Object.assign(routes, window.__pendingRoutes);
   window.__pendingRoutes = null;
@@ -52,15 +47,11 @@ function render() {
     if (prev) prev.dispatchEvent(new CustomEvent("view:unmount"));
     page.innerHTML = "";
     const node = factory({ id });
-    if (node && node.nodeType === 1) {
-      page.appendChild(node);
-    } else {
-      throw new Error("View did not return a DOM element");
-    }
+    page.appendChild(node);
     document.getElementById("sidebar").classList.remove("open");
   } catch (e) {
-    console.error("Render error:", e);
-    page.innerHTML = `<div class="state"><div class="state-title">Error</div><div class="state-sub">${e.message}</div></div>`;
+    console.error(e);
+    page.innerHTML = `<div style="padding:40px;color:red;">Error: ${e.message}</div>`;
   }
 }
 
@@ -69,44 +60,16 @@ window.addEventListener("DOMContentLoaded", () => {
   if (!location.hash) location.hash = "#/dashboard";
   render();
 
-  // Sidebar toggle
   document.getElementById("menu-btn").addEventListener("click", () => {
     document.getElementById("sidebar").classList.toggle("open");
   });
 
-  // Firebase connection status
-  const statusEl = document.querySelector(".fw-status");
-  const txt = document.getElementById("fw-status-text");
-  if (statusEl && txt) {
-    statusEl.classList.remove("online", "error");
-    txt.textContent = "Connecting…";
-
-    try {
-      const connectedRef = dbRef(db, ".info/connected");
-      onValue(connectedRef, (snap) => {
-        const connected = snap.val();
-        if (connected === true) {
-          statusEl.classList.add("online");
-          statusEl.classList.remove("error");
-          txt.textContent = "Connected to Firebase";
-        } else {
-          statusEl.classList.add("error");
-          statusEl.classList.remove("online");
-          txt.textContent = "Firebase unreachable";
-        }
-      });
-    } catch (e) {
-      console.warn("Connection monitor failed:", e);
-    }
-
-    firebaseHealthCheck().then(ok => {
-      if (ok) {
-        statusEl.classList.add("online");
-        statusEl.classList.remove("error");
-        txt.textContent = "Connected to Firebase";
-      }
-    });
-  }
+  firebaseHealthCheck().then(ok => {
+    const statusEl = document.querySelector(".fw-status");
+    const txt = document.getElementById("fw-status-text");
+    if (ok) { statusEl.classList.add("online"); txt.textContent = "Connected"; }
+    else { statusEl.classList.add("error"); txt.textContent = "Error"; }
+  });
 });
 
 if (document.readyState !== "loading") {
