@@ -7,6 +7,10 @@ import { TeachersView } from "./views/teachers.js";
 import { FeesView } from "./views/fees.js";
 import { SalaryView } from "./views/salary.js";
 import { ReceiptsView } from "./views/receipts.js";
+import { ReportsView } from "./views/reports.js";
+import { ImportExportView } from "./views/import-export.js";
+import { IDCardView } from "./views/id-card.js";
+import { AttendanceView } from "./views/attendance.js";   // if not already added
 
 const routes = window.__routes = {
   dashboard: () => DashboardView(),
@@ -15,7 +19,11 @@ const routes = window.__routes = {
   teachers: (p) => TeachersView(p),
   fees: () => FeesView(),
   salary: () => SalaryView(),
-  receipts: () => ReceiptsView()
+  receipts: () => ReceiptsView(),
+  attendance: () => AttendanceView(),
+  reports: () => ReportsView(),
+  "import-export": () => ImportExportView(),
+  "id-card": () => IDCardView()
 };
 
 // Apply any pending routes that were registered before app.js loaded
