@@ -19,17 +19,14 @@ const routes = window.__routes = {
   teachers: (p) => TeachersView(p),
   fees: () => FeesView(),
   salary: () => SalaryView(),
-  receipts: () => ReceiptsView(),
-  attendance: () => AttendanceView(),
-  reports: () => ReportsView(),
-  "import-export": () => ImportExportView(),
-  "id-card": () => IDCardView()
+  receipts: () => ReceiptsView()
 };
 
 // Apply any pending routes that were registered before app.js loaded
 if (window.__pendingRoutes) {
   Object.assign(routes, window.__pendingRoutes);
   window.__pendingRoutes = null;
+}w.__pendingRoutes = null;
 }
 
 const page = document.getElementById("page");
