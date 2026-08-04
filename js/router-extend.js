@@ -1,19 +1,25 @@
-// Extension for app.js routes – no modifications to app.js needed
+// Route extensions – add new modules without editing app.js
 import { AttendanceView } from "./views/attendance.js";
+import { ReportsView } from "./views/reports.js";
+import { ImportExportView } from "./views/import-export.js";
+import { IDCardView } from "./views/id-card.js";
 
-// Get the routes object from app.js via the global window object
-// We'll expose routes as a global from app.js
-
-// This function will be called after app.js loads
 export function extendRoutes() {
   if (window.__routes) {
+    // Existing route
     window.__routes.attendance = () => AttendanceView();
+    // New routes
+    window.__routes.reports = () => ReportsView();
+    window.__routes["import-export"] = () => ImportExportView();
+    window.__routes["id-card"] = () => IDCardView();
   } else {
-    // Fallback: store routes to be applied later
     window.__pendingRoutes = window.__pendingRoutes || {};
     window.__pendingRoutes.attendance = () => AttendanceView();
+    window.__pendingRoutes.reports = () => ReportsView();
+    window.__pendingRoutes["import-export"] = () => ImportExportView();
+    window.__pendingRoutes["id-card"] = () => IDCardView();
   }
 }
 
-// Auto-run when this module loads
+// Auto-run
 extendRoutes();
