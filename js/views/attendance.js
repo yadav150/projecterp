@@ -20,7 +20,6 @@ export function AttendanceView() {
   setCrumbs([{ label: "Attendance" }]);
   const page = el("div", { "data-testid": "attendance-view" });
 
-  // Header
   page.appendChild(el("div", { class: "page-header" }, [
     el("div", {}, [
       el("h1", { class: "page-title", text: "Attendance Management" }),
@@ -28,7 +27,6 @@ export function AttendanceView() {
     ])
   ]));
 
-  // Date picker
   const datePicker = el("div", { style: "display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap;" }, [
     el("label", { style: "font-weight:600;", text: "Date:" }),
     el("input", {
@@ -41,7 +39,6 @@ export function AttendanceView() {
   ]);
   page.appendChild(datePicker);
 
-  // Tabs
   const tabs = el("div", { style: "display:flex;gap:6px;margin-bottom:16px;" });
   const studentTab = tabBtn("Student Attendance", true);
   const teacherTab = tabBtn("Teacher Attendance", false);
@@ -49,13 +46,11 @@ export function AttendanceView() {
   tabs.appendChild(teacherTab);
   page.appendChild(tabs);
 
-  // Mounting containers
   const studentMount = el("div");
   const teacherMount = el("div", { style: "display:none;" });
   page.appendChild(studentMount);
   page.appendChild(teacherMount);
 
-  // Class/Section filter for students
   const filterBar = el("div", { class: "filter-bar" });
   const classSel = el("select", { class: "select", "data-testid": "attendance-class" }, [
     el("option", { value: "", text: "All Classes" }),
@@ -73,13 +68,11 @@ export function AttendanceView() {
   let attendanceData = {};
   let currentType = 'students';
 
-  // Load attendance on date change
   datePicker.querySelector('input').addEventListener('change', (e) => {
     currentDate = e.target.value;
     loadAttendance();
   });
 
-  // Tab switching
   studentTab.onclick = () => {
     setActive(studentTab, teacherTab);
     studentMount.style.display = "";
@@ -95,11 +88,9 @@ export function AttendanceView() {
     loadAttendance();
   };
 
-  // Filter change
   classSel.addEventListener('change', renderStudentAttendance);
   sectionSel.addEventListener('change', renderStudentAttendance);
 
-  // Subscribe to students and teachers
   unsubS && unsubS();
   unsubS = subscribeStudents((list) => {
     students = list || [];
@@ -113,11 +104,8 @@ export function AttendanceView() {
   });
 
   function loadAttendance() {
-    if (currentType === 'students') {
-      renderStudentAttendance();
-    } else {
-      renderTeacherAttendance();
-    }
+    if (currentType === 'students') renderStudentAttendance();
+    else renderTeacherAttendance();
   }
 
   function renderStudentAttendance() {
@@ -139,7 +127,6 @@ export function AttendanceView() {
       return;
     }
 
-    // Load attendance for this date
     subscribeAttendance(currentDate, 'students', (data) => {
       attendanceData = data || {};
       renderAttendanceGrid(studentMount, filtered, attendanceData, 'students', currentDate);
@@ -172,9 +159,7 @@ export function AttendanceView() {
     unsubT = null;
   });
 
-  // Initial load
   renderStudentAttendance();
-
   return page;
 }
 
@@ -191,12 +176,10 @@ function setActive(on, off) {
 }
 
 function renderAttendanceGrid(container, items, attendance, type, date) {
-  // Clear previous content (keep filter bar if present)
   const filterBar = container.querySelector('.filter-bar');
   container.innerHTML = "";
   if (filterBar) container.appendChild(filterBar);
 
-  // Summary stats
   const stats = el("div", { class: "summary-grid", style: "margin-bottom:16px;" });
   const statusCounts = { present: 0, absent: 0, late: 0, leave: 0 };
   items.forEach(item => {
@@ -224,7 +207,6 @@ function renderAttendanceGrid(container, items, attendance, type, date) {
   });
   container.appendChild(stats);
 
-  // Attendance grid
   const grid = el("div", {
     style: "display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:16px;"
   });
@@ -237,14 +219,12 @@ function renderAttendanceGrid(container, items, attendance, type, date) {
       style: "background:#fff;border:1px solid var(--border);border-radius:var(--radius);padding:12px;display:flex;flex-direction:column;gap:8px;"
     });
 
-    // Name and avatar
     const nameRow = el("div", { style: "display:flex;align-items:center;gap:10px;" }, [
       avatarNode(item),
       el("div", { style: "font-weight:600;font-size:13px;flex:1;", text: item.name || "—" })
     ]);
     card.appendChild(nameRow);
 
-    // Status badge and dropdown
     const statusRow = el("div", { style: "display:flex;gap:6px;align-items:center;" }, [
       el("span", { class: `badge ${statusObj.badge}`, text: statusObj.label }),
       el("select", {
@@ -261,7 +241,6 @@ function renderAttendanceGrid(container, items, attendance, type, date) {
 
   container.appendChild(grid);
 
-  // Save button
   const saveBtn = el("button", {
     class: "btn btn-primary",
     "data-testid": "save-attendance",
@@ -281,12 +260,9 @@ function renderAttendanceGrid(container, items, attendance, type, date) {
     try {
       await saveAttendance(date, type, records);
       toast({ type: "success", title: "Attendance saved", message: `Saved for ${date}` });
-      // Refresh to show updated stats
       const refreshed = await getAttendance(date, type);
       attendanceData = refreshed || {};
-      // Re-render with updated data
-      const itemsList = type === 'students' ? items : items;
-      renderAttendanceGrid(container, itemsList, attendanceData, type, date);
+      renderAttendanceGrid(container, items, attendanceData, type, date);
     } catch (e) {
       toast({ type: "error", title: "Save failed", message: e.message });
       saveBtn.disabled = false;
