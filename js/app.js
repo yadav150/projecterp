@@ -7,8 +7,8 @@ import { TeachersView } from "./views/teachers.js";
 import { FeesView } from "./views/fees.js";
 import { SalaryView } from "./views/salary.js";
 import { ReceiptsView } from "./views/receipts.js";
-import { ReportsView } from "./views/reports.js";
 
+// Define routes and expose them globally for router-extend.js
 const routes = window.__routes = {
   dashboard: () => DashboardView(),
   students: (p) => StudentsView(p),
@@ -23,7 +23,6 @@ const routes = window.__routes = {
 if (window.__pendingRoutes) {
   Object.assign(routes, window.__pendingRoutes);
   window.__pendingRoutes = null;
-}w.__pendingRoutes = null;
 }
 
 const page = document.getElementById("page");
