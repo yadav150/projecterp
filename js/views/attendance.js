@@ -1,4 +1,4 @@
-// Attendance View – mark daily attendance for students and teachers
+// Attendance View — mark daily attendance for students and teachers
 import { el, ICON, fmtDate, todayISO, CLASSES, SECTIONS } from "../utils.js";
 import { DataTable, setCrumbs, openModal, toast, loadingState } from "../ui.js";
 import { subscribeStudents, subscribeTeachers } from "../data.js";
@@ -15,7 +15,6 @@ let students = [];
 let teachers = [];
 let unsubS = null;
 let unsubT = null;
-let unsubA = null;
 
 export function AttendanceView() {
   setCrumbs([{ label: "Attendance" }]);
@@ -169,10 +168,8 @@ export function AttendanceView() {
   page.addEventListener("view:unmount", () => {
     unsubS && unsubS();
     unsubT && unsubT();
-    unsubA && unsubA();
     unsubS = null;
     unsubT = null;
-    unsubA = null;
   });
 
   // Initial load
