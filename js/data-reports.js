@@ -1,14 +1,9 @@
 // Data aggregation for reports
-import { get } from "firebase/database";
+import { get } from "./firebase.js";
 import { db, PATH, dbRef } from "./firebase.js";
-import { subscribeStudents, subscribeTeachers, subscribeFees, subscribeSalaries } from "./data.js";
 
 /**
  * Get fee collection summary for a period
- * @param {string} startDate - ISO date (YYYY-MM-DD)
- * @param {string} endDate - ISO date (YYYY-MM-DD)
- * @param {string} classFilter - optional class
- * @returns {Promise<object>} - { totalCollected, totalPending, totalRecords, byClass, byFeeType }
  */
 export async function getFeeReport(startDate, endDate, classFilter = '') {
   const feesRef = dbRef(db, PATH.fees);
@@ -37,10 +32,6 @@ export async function getFeeReport(startDate, endDate, classFilter = '') {
 
 /**
  * Get attendance summary for a month
- * @param {string} month - ISO month (YYYY-MM)
- * @param {string} classFilter - optional class
- * @param {string} sectionFilter - optional section
- * @returns {Promise<object>} - { present, absent, late, leave, total }
  */
 export async function getAttendanceReport(month, classFilter = '', sectionFilter = '') {
   const studentsRef = dbRef(db, PATH.students);
@@ -75,9 +66,6 @@ export async function getAttendanceReport(month, classFilter = '', sectionFilter
 
 /**
  * Get teacher payroll summary
- * @param {string} month - ISO month (YYYY-MM)
- * @param {string} department - optional department
- * @returns {Promise<object>} - { totalPaid, totalPending, byDepartment, byDesignation }
  */
 export async function getPayrollReport(month, department = '') {
   const salariesRef = dbRef(db, PATH.salaries);
@@ -105,10 +93,6 @@ export async function getPayrollReport(month, department = '') {
 
 /**
  * Get student list with filters
- * @param {string} classFilter - optional class
- * @param {string} sectionFilter - optional section
- * @param {string} statusFilter - optional status
- * @returns {Promise<Array>} - array of student objects
  */
 export async function getStudentListReport(classFilter = '', sectionFilter = '', statusFilter = '') {
   const studentsRef = dbRef(db, PATH.students);
