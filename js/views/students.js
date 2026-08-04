@@ -5,6 +5,7 @@ import {
 } from "../utils.js";
 import { DataTable, setCrumbs, openModal, confirmDialog, toast, loadingState } from "../ui.js";
 import { subscribeStudents, createStudent, updateStudent, deleteStudent, getStudent } from "../data.js";
+import { renderStudentProfile } from "./student-profile.js";
 
 let unsub = null;
 
@@ -34,9 +35,6 @@ export function StudentsView({ id } = {}) {
   listMount.appendChild(loadingState("Loading students…"));
 
   let rows = [];
-  let filterClass = "";
-  let filterSection = "";
-  let filterStatus = "";
   let table = null;
 
   const classSel = el("select", { class: "select", "data-testid": "filter-class" }, [
@@ -263,47 +261,9 @@ export function validateStudent(d) {
   return null;
 }
 
+// Profile page using the new renderer from student-profile.js
 function profilePage(id) {
-  const page = el("div", { "data-testid": "student-profile" });
-  page.appendChild(loadingState("Loading student…"));
-  getStudent(id).then(r => {
-    page.innerHTML = "";
-    if (!r) { page.appendChild(el("div", { class: "state", text: "Student not found" })); return; }
-    page.appendChild(el("div", { class: "profile-head" }, [
-      (() => { const a = el("div", { class: "avatar lg" }); if (r.photoUrl) a.appendChild(el("img", { src: r.photoUrl })); else a.textContent = initials(r.name); return a; })(),
-      el("div", { class: "meta", style: "flex:1" }, [
-        el("h2", { text: r.name }),
-        el("p", { text: `Class ${r.class || "—"} · Section ${r.section || "—"} · Roll ${r.rollNumber || "—"}` }),
-        el("div", { class: "chips" }, [
-          el("span", { class: "badge indigo", text: `Adm #${r.admissionNumber || "—"}` }),
-          el("span", { class: "badge slate", text: r.admissionId || "" }),
-          el("span", { class: `badge ${r.status === "Active" ? "green" : "slate"}`, text: r.status || "Active" })
-        ])
-      ]),
-      el("div", { class: "page-actions" }, [
-        el("button", { class: "btn btn-outline", onclick: () => openStudentForm({ mode: "edit", record: r }), html: `${ICON.edit}<span>Edit</span>` }),
-        el("a", { class: "btn btn-primary", href: `#/admission?id=${r.id}`, html: `${ICON.receipt}<span>Application Form</span>` })
-      ])
-    ]));
-
-    const details = [
-      ["Full Name", r.name], ["Gender", r.gender], ["DOB", fmtDate(r.dob)], ["Age", ageFromDob(r.dob)],
-      ["Class", r.class], ["Section", r.section], ["Roll Number", r.rollNumber],
-      ["Father's Name", r.fatherName], ["Mother's Name", r.motherName], ["Guardian", r.guardian],
-      ["Phone", r.phone], ["Emergency Contact", r.emergencyContact], ["Email", r.email],
-      ["Address", r.address], ["Blood Group", r.bloodGroup], ["Religion", r.religion],
-      ["Category", r.category], ["Previous School", r.previousSchool],
-      ["Admission Date", fmtDate(r.admissionDate)], ["Status", r.status || "Active"]
-    ];
-    const card = el("div", { class: "card" }, [
-      el("div", { class: "card-header" }, [el("div", { class: "card-title", text: "Student Details" })]),
-      el("div", { class: "card-body" }, [
-        el("div", { class: "detail-grid" }, details.map(([k, v]) => el("div", { class: "detail-row" }, [
-          el("div", { class: "k", text: k }), el("div", { class: "v", text: v || "—" })
-        ])))
-      ])
-    ]);
-    page.appendChild(card);
-  });
+  const page = el("div", { "data-profile-root": true, "data-testid": "student-profile" });
+  renderStudentProfile(id, page);
   return page;
 }
