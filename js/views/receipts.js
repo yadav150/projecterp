@@ -142,7 +142,6 @@ export function openSalaryReceipt(r) {
 
 // ---------- Modal with horizontal scroll and Print only ----------
 function openReceiptModal(title, node) {
-  // Wrap receipt in a horizontally scrollable container
   const scrollWrapper = el("div", {
     style: "overflow-x: auto; width: 100%; padding: 8px 0;"
   });
@@ -165,7 +164,7 @@ function openReceiptModal(title, node) {
   printBtn.onclick = () => printNode(node);
 }
 
-// ---------- Receipt HTML renderer (unchanged) ----------
+// ---------- Receipt HTML renderer ----------
 function renderReceipt({ kind, number, date, parties, lines, totalDue, paid, balance, remarks }) {
   const wrap = el("div", { class: "receipt print-area", "data-testid": "receipt", style: "max-width: 100%;" });
   wrap.appendChild(el("div", { class: "receipt-head" }, [
