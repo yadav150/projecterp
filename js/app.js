@@ -1,6 +1,5 @@
-// App entry: router + view lifecycle – with real-time Firebase connection monitor
-import { firebaseHealthCheck } from "./firebase.js";
-import { db, dbRef, onValue } from "./firebase.js"; // import db and dbRef
+// App entry: router + view lifecycle
+import { firebaseHealthCheck, db, dbRef, onValue } from "./firebase.js";
 import { DashboardView } from "./views/dashboard.js";
 import { StudentsView } from "./views/students.js";
 import { AdmissionView } from "./views/admission.js";
@@ -54,30 +53,30 @@ window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("sidebar").classList.toggle("open");
   });
 
-  // ---- Real-time Firebase connection monitor ----
+  // Real-time Firebase connection status
   const statusEl = document.querySelector(".fw-status");
   const txt = document.getElementById("fw-status-text");
-
-  // Set initial state
   statusEl.classList.remove("online", "error");
   txt.textContent = "Connecting…";
 
-  // Listen to .info/connected for real-time updates
-  const connectedRef = dbRef(db, ".info/connected");
-  onValue(connectedRef, (snap) => {
-    const connected = snap.val();
-    if (connected === true) {
-      statusEl.classList.add("online");
-      statusEl.classList.remove("error");
-      txt.textContent = "Connected to Firebase";
-    } else {
-      statusEl.classList.add("error");
-      statusEl.classList.remove("online");
-      txt.textContent = "Firebase unreachable";
-    }
-  });
+  try {
+    const connectedRef = dbRef(db, ".info/connected");
+    onValue(connectedRef, (snap) => {
+      const connected = snap.val();
+      if (connected === true) {
+        statusEl.classList.add("online");
+        statusEl.classList.remove("error");
+        txt.textContent = "Connected to Firebase";
+      } else {
+        statusEl.classList.add("error");
+        statusEl.classList.remove("online");
+        txt.textContent = "Firebase unreachable";
+      }
+    });
+  } catch (e) {
+    console.warn("Connection monitor failed:", e);
+  }
 
-  // Also run the health check once (for extra validation and to create the _meta node if needed)
   firebaseHealthCheck().then(ok => {
     if (ok) {
       statusEl.classList.add("online");
