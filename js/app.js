@@ -21,8 +21,6 @@ const viewModules = [
   { name: 'teachers', path: './views/teachers.js' },
   { name: 'fees', path: './views/fees.js' },
   { name: 'salary', path: './views/salary.js' },
-   { name: 'attendance', path: './views/attendance.js' },
-  { name: 'administration', path: './views/administration.js' }
   { name: 'receipts', path: './views/receipts.js' }
 ];
 
