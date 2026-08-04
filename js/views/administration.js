@@ -1,5 +1,5 @@
 // Administration module – Reports, Import/Export, ID Cards, Certificates
-import { el, ICON, fmtCurrency, fmtDate, todayISO, CLASSES, SECTIONS, DEPARTMENTS } from "../utils.js";
+import { el, ICON, fmtCurrency, fmtDate, todayISO, CLASSES, SECTIONS, DEPARTMENTS, initials } from "../utils.js";
 import { DataTable, setCrumbs, openModal, toast, loadingState } from "../ui.js";
 import { subscribeStudents, subscribeTeachers, subscribeFees, subscribeSalaries } from "../data.js";
 import { getFeeReport, getAttendanceReport, getPayrollReport, getStudentListReport } from "../data-reports.js";
@@ -54,7 +54,6 @@ export function AdministrationView() {
         containers[key].style.display = "none";
       }
     });
-    // Load content lazily
     if (name === 'Reports') renderReports(containers['Reports']);
     else if (name === 'Import Export') renderImportExport(containers['Import Export']);
     else if (name === 'ID Cards') renderIDCards(containers['ID Cards']);
@@ -162,7 +161,6 @@ function renderReports(container) {
 
   generateBtn.onclick = generateReport;
   exportBtn.onclick = async () => {
-    // Export current report data as CSV
     const type = reportType.value;
     let csvData = [];
     let columns = [];
@@ -198,13 +196,14 @@ function renderFeeReport(container, data) {
     { label: "Total Records", value: data.totalRecords }
   ].forEach(s => {
     stats.appendChild(el("div", { class: "stat" }, [
-      el("div", { class: "stat-label", text: s.label }),
-      el("div", { class: "stat-value", text: String(s.value) })
+      el("div", { class: "stat-top" }, [
+        el("div", { class: "stat-label", text: s.label }),
+        el("div", { class: "stat-value", text: String(s.value) })
+      ])
     ]));
   });
   container.appendChild(stats);
 
-  // By Class
   if (Object.keys(data.byClass).length) {
     const table = el("div", { class: "table-wrap", style: "margin-top:16px;" });
     const tbl = el("table", { class: "data-table" });
@@ -233,8 +232,10 @@ function renderAttendanceReport(container, data) {
     { label: "Total Records", value: data.total }
   ].forEach(s => {
     stats.appendChild(el("div", { class: "stat" }, [
-      el("div", { class: "stat-label", text: s.label }),
-      el("div", { class: "stat-value", text: String(s.value) })
+      el("div", { class: "stat-top" }, [
+        el("div", { class: "stat-label", text: s.label }),
+        el("div", { class: "stat-value", text: String(s.value) })
+      ])
     ]));
   });
   container.appendChild(stats);
@@ -248,13 +249,14 @@ function renderPayrollReport(container, data) {
     { label: "Total Pending", value: fmtCurrency(data.totalPending) }
   ].forEach(s => {
     stats.appendChild(el("div", { class: "stat" }, [
-      el("div", { class: "stat-label", text: s.label }),
-      el("div", { class: "stat-value", text: String(s.value) })
+      el("div", { class: "stat-top" }, [
+        el("div", { class: "stat-label", text: s.label }),
+        el("div", { class: "stat-value", text: String(s.value) })
+      ])
     ]));
   });
   container.appendChild(stats);
 
-  // By Department
   if (Object.keys(data.byDepartment).length) {
     const table = el("div", { class: "table-wrap", style: "margin-top:16px;" });
     const tbl = el("table", { class: "data-table" });
@@ -299,10 +301,10 @@ function renderStudentListReport(container, data) {
 // ---------- IMPORT / EXPORT TAB ----------
 function renderImportExport(container) {
   container.innerHTML = "";
-  container.appendChild(el("div", { style: "display:grid;grid-template-columns:1fr 1fr;gap:16px;" }, [
-    exportSection(),
-    importSection()
-  ]));
+  const grid = el("div", { style: "display:grid;grid-template-columns:1fr 1fr;gap:16px;" });
+  grid.appendChild(exportSection());
+  grid.appendChild(importSection());
+  container.appendChild(grid);
 }
 
 function exportSection() {
@@ -368,7 +370,6 @@ function importSection() {
     const type = typeSel.value;
     const rows = parseCSV(csv);
     if (!rows.length) { toast({ type: "error", title: "Empty or invalid CSV" }); return; }
-    // Validate required fields
     if (type === 'students') {
       const required = ['name', 'class', 'fatherName', 'phone'];
       const missing = required.filter(f => !rows[0][f]);
@@ -376,9 +377,6 @@ function importSection() {
         toast({ type: "error", title: "Missing columns", message: `Required: ${missing.join(', ')}` });
         return;
       }
-      // We could bulk create, but for simplicity, we'll just show the first few rows in a modal.
-      // For actual import, we would need to call createStudent for each row.
-      // We'll show a preview and ask for confirmation.
       openImportPreview(rows, type);
     } else if (type === 'teachers') {
       const required = ['name', 'designation', 'department', 'phone'];
@@ -418,8 +416,8 @@ function openImportPreview(rows, type) {
     for (const row of rows) {
       try {
         if (type === 'students') {
-          // Map CSV to student fields
-          const data = {
+          const { createStudent } = await import("../data.js");
+          await createStudent({
             name: row.name,
             class: row.class,
             section: row.section || '',
@@ -430,10 +428,7 @@ function openImportPreview(rows, type) {
             dob: row.dob || new Date().toISOString().slice(0,10),
             admissionDate: row.admissionDate || todayISO(),
             status: 'Active'
-          };
-          // We need to import createStudent from data.js
-          const { createStudent } = await import("../data.js");
-          await createStudent(data, null);
+          }, null);
           success++;
         } else if (type === 'teachers') {
           const { createTeacher } = await import("../data.js");
