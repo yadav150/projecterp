@@ -9,20 +9,12 @@ const CERTIFICATE_TYPES = [
   { value: 'conduct', label: 'Character Certificate' }
 ];
 
-/**
- * Generate certificate HTML
- * @param {Object} student - student object
- * @param {string} type - certificate type
- * @param {string} issueDate - ISO date
- * @returns {HTMLElement} - printable certificate element
- */
 export function generateCertificate(student, type, issueDate) {
   const cert = el('div', {
     class: 'certificate',
     style: 'width:700px;padding:40px;border:8px double #dc3545;border-radius:5px;background:#fff;font-family:Inter,serif;text-align:center;margin:0 auto;'
   });
 
-  // School header
   const header = el('div', { style: 'border-bottom:2px solid #dc3545;padding-bottom:16px;margin-bottom:20px;' }, [
     el('div', { style: 'font-size:24px;font-weight:800;letter-spacing:2px;color:#1e293b;', text: SCHOOL.name }),
     el('div', { style: 'font-size:13px;color:#64748b;', text: SCHOOL.address }),
@@ -30,15 +22,12 @@ export function generateCertificate(student, type, issueDate) {
   ]);
   cert.appendChild(header);
 
-  // Title
   const typeLabel = CERTIFICATE_TYPES.find(t => t.value === type)?.label || 'Certificate';
   cert.appendChild(el('div', { style: 'font-size:22px;font-weight:700;margin-bottom:20px;text-transform:uppercase;letter-spacing:4px;color:#dc3545;', text: typeLabel }));
 
-  // Certificate number
   const certNumber = `JPA/CERT/${String(Date.now()).slice(-6)}`;
   cert.appendChild(el('div', { style: 'font-size:12px;color:#64748b;margin-bottom:16px;', text: `Certificate No: ${certNumber}` }));
 
-  // Body
   const bodyText = el('div', { style: 'font-size:15px;line-height:1.8;text-align:left;padding:0 20px;' });
 
   if (type === 'bonafide') {
@@ -59,10 +48,8 @@ export function generateCertificate(student, type, issueDate) {
     bodyText.appendChild(el('p', { style: 'text-indent:40px;', text: `He/She is recommended for further studies.` }));
   }
 
-  // Date
   bodyText.appendChild(el('p', { style: 'margin-top:20px;text-align:right;', text: `Date: ${fmtDate(issueDate)}` }));
 
-  // Signatures
   bodyText.appendChild(el('div', { style: 'margin-top:40px;display:flex;justify-content:space-between;' }, [
     el('div', { style: 'text-align:center;' }, [
       el('div', { style: 'width:150px;border-top:1px solid #1e293b;margin:0 auto;' }),
@@ -76,7 +63,6 @@ export function generateCertificate(student, type, issueDate) {
 
   cert.appendChild(bodyText);
 
-  // Footer
   cert.appendChild(el('div', { style: 'margin-top:30px;border-top:1px solid #e2e8f0;padding-top:12px;font-size:11px;color:#94a3b8;' }, [
     el('span', { text: 'This is a system-generated certificate. Verification can be done using the certificate number.' })
   ]));
@@ -84,14 +70,9 @@ export function generateCertificate(student, type, issueDate) {
   return cert;
 }
 
-/**
- * Open certificate modal with generation options
- * @param {Object} student - student object
- */
 export function openCertificateModal(student) {
   const body = el('div', { style: 'padding:12px;' });
 
-  // Type selector
   const typeSel = el('select', { class: 'select', style: 'width:100%;margin-bottom:12px;' });
   CERTIFICATE_TYPES.forEach(t => typeSel.appendChild(el('option', { value: t.value, text: t.label })));
 
@@ -114,7 +95,6 @@ export function openCertificateModal(student) {
     previewContainer.innerHTML = '';
     previewContainer.appendChild(cert);
 
-    // Add print button below certificate
     const printBtn = el('button', { class: 'btn btn-outline', style: 'margin-top:10px;', text: 'Print Certificate' });
     previewContainer.appendChild(printBtn);
     printBtn.onclick = () => printNode(cert);
