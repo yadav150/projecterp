@@ -89,3 +89,17 @@ export async function firebaseHealthCheck() {
     return false;
   }
 }
+
+export async function deleteFile(url) {
+  if (!url) return;
+  try {
+    const decodedUrl = decodeURIComponent(url);
+    const match = decodedUrl.match(/\/o\/(.+?)\?/);
+    if (!match) return;
+    const path = match[1];
+    const fileRef = sRef(storage, path);
+    await deleteObject(fileRef);
+  } catch (e) {
+    console.warn("Failed to delete file:", e.message);
+  }
+}
