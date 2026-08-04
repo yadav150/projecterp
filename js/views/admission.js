@@ -1,6 +1,6 @@
-// Admission Module – Enterprise-grade workflow
+// Admission Module — Multi-step workflow with Personal, Education, Upload, Payment, Final, Print
 import { el, ICON, fmtDate, todayISO, CLASSES, SECTIONS, GENDERS, required } from "../utils.js";
-import { DataTable, setCrumbs, openModal, toast, loadingState } from "../ui.js";
+import { DataTable, setCrumbs, openModal, toast, loadingState, confirmDialog } from "../ui.js";
 import { subscribeStudents, createStudent } from "../data.js";
 import {
   createAdmission, updateAdmission, getAdmission, subscribeAdmissions,
@@ -12,9 +12,8 @@ import {
   getDocStatusLabel, getDocBadge
 } from "../admission/admission-utils.js";
 import { openAdmissionPrint } from "../admission/admission-print.js";
-import { ADMISSION_PATH, STATUSES, DOC_TYPES } from "../admission/admission-config.js";
+import { ADMISSION_PATH, STATUSES, DOC_TYPES, FEE_TYPES } from "../admission/admission-config.js";
 
-// Global state
 let allAdmissions = [];
 let unsub = null;
 
@@ -43,7 +42,6 @@ export function AdmissionView() {
   page.appendChild(containers.list);
   page.appendChild(containers.new);
 
-  // Switch tabs
   function switchTab(name) {
     Object.keys(tabs).forEach(key => {
       const btn = tabs[key];
@@ -55,7 +53,6 @@ export function AdmissionView() {
         containers[key].style.display = "none";
       }
     });
-    // Lazy load content
     if (name === 'dashboard') renderDashboard(containers.dashboard);
     else if (name === 'list') renderList(containers.list);
     else if (name === 'new') renderNewForm(containers.new);
@@ -65,11 +62,9 @@ export function AdmissionView() {
   tabs.list.onclick = () => switchTab('list');
   tabs.new.onclick = () => switchTab('new');
 
-  // Subscribe to admissions
   unsub && unsub();
   unsub = subscribeAdmissions((list) => {
     allAdmissions = list || [];
-    // Re-render active tab if visible
     const activeTab = document.querySelector('.btn-primary');
     if (activeTab) {
       const tabName = Object.keys(tabs).find(k => tabs[k] === activeTab);
@@ -80,7 +75,6 @@ export function AdmissionView() {
 
   page.addEventListener("view:unmount", () => { unsub && unsub(); unsub = null; });
 
-  // Initial render
   renderDashboard(containers.dashboard);
   return page;
 }
@@ -135,7 +129,6 @@ function renderDashboard(container) {
 // ---------- List View ----------
 function renderList(container) {
   container.innerHTML = "";
-  // Filters
   const filterBar = el("div", { class: "filter-bar" });
   const search = el("input", { class: "input", placeholder: "Search by name, admission #, phone...", style: "flex:1;" });
   const statusFilter = el("select", { class: "select" }, [
@@ -163,7 +156,7 @@ function renderList(container) {
       }
       return true;
     });
-    // Use DataTable
+
     const columns = [
       { key: 'admissionNumber', label: 'Admission #', sortable: true },
       { key: 'studentName', label: 'Student', sortable: true, render: r => el("div", {}, [
@@ -213,21 +206,22 @@ function rowActions(items) {
   return wrap;
 }
 
-// ---------- New Application / Workflow ----------
+// ---------- New Application – 6 Steps ----------
 function renderNewForm(container) {
   container.innerHTML = "";
-  // Multi-step form
+  // Step definitions: Personal, Education, Upload, Payment, Final, Print
   const steps = [
-    { id: 'student', label: 'Student Info' },
-    { id: 'parent', label: 'Parent Info' },
-    { id: 'academic', label: 'Academic' },
-    { id: 'documents', label: 'Documents' },
-    { id: 'review', label: 'Review & Submit' }
+    { id: 'personal', label: 'Personal' },
+    { id: 'education', label: 'Education' },
+    { id: 'upload', label: 'Upload' },
+    { id: 'payment', label: 'Payment' },
+    { id: 'final', label: 'Final' },
+    { id: 'print', label: 'Print' }
   ];
   let currentStep = 0;
   let formData = {};
-  let docFiles = {};
-  let admissionId = null; // if editing existing
+  let admissionId = null;
+  let isSubmitted = false;
 
   const stepContainer = el("div");
   container.appendChild(stepContainer);
@@ -248,30 +242,40 @@ function renderNewForm(container) {
     stepContainer.appendChild(content);
 
     // Render step content
-    if (idx === 0) renderStudentStep(content);
-    else if (idx === 1) renderParentStep(content);
-    else if (idx === 2) renderAcademicStep(content);
-    else if (idx === 3) renderDocumentsStep(content);
-    else if (idx === 4) renderReviewStep(content);
+    if (idx === 0) renderPersonalStep(content);
+    else if (idx === 1) renderEducationStep(content);
+    else if (idx === 2) renderUploadStep(content);
+    else if (idx === 3) renderPaymentStep(content);
+    else if (idx === 4) renderFinalStep(content);
+    else if (idx === 5) renderPrintStep(content);
 
-    // Navigation buttons
-    const nav = el("div", { style: "display:flex;justify-content:space-between;margin-top:16px;" });
-    if (idx > 0) {
-      const prevBtn = el("button", { class: "btn btn-outline", text: "Previous" });
-      prevBtn.onclick = () => { currentStep--; renderStep(currentStep); };
-      nav.appendChild(prevBtn);
+    // Navigation buttons (except print step)
+    if (idx < steps.length - 1) {
+      const nav = el("div", { style: "display:flex;justify-content:space-between;margin-top:16px;" });
+      if (idx > 0) {
+        const prevBtn = el("button", { class: "btn btn-outline", text: "Previous" });
+        prevBtn.onclick = () => { currentStep--; renderStep(currentStep); };
+        nav.appendChild(prevBtn);
+      }
+      const nextBtn = el("button", { class: "btn btn-primary", text: idx === steps.length-2 ? "Submit" : "Next" });
+      nextBtn.onclick = () => {
+        if (idx === steps.length-2) submitAdmission();
+        else { currentStep++; renderStep(currentStep); }
+      };
+      nav.appendChild(nextBtn);
+      stepContainer.appendChild(nav);
+    } else {
+      // Print step – only close button
+      const nav = el("div", { style: "display:flex;justify-content:flex-end;margin-top:16px;" });
+      const closeBtn = el("button", { class: "btn btn-ghost", text: "Close" });
+      closeBtn.onclick = () => { switchTab('list'); };
+      nav.appendChild(closeBtn);
+      stepContainer.appendChild(nav);
     }
-    const nextBtn = el("button", { class: "btn btn-primary", text: idx === steps.length-1 ? "Submit" : "Next" });
-    nextBtn.onclick = () => {
-      if (idx === steps.length-1) submitAdmission();
-      else { currentStep++; renderStep(currentStep); }
-    };
-    nav.appendChild(nextBtn);
-    stepContainer.appendChild(nav);
   }
 
-  // Step renderers (simplified – actual forms with fields)
-  function renderStudentStep(container) {
+  // Step renderers
+  function renderPersonalStep(container) {
     const fields = [
       { key: 'studentName', label: 'Student Name', required: true },
       { key: 'gender', label: 'Gender', type: 'select', options: GENDERS },
@@ -282,7 +286,6 @@ function renderNewForm(container) {
     ];
     const form = buildForm(fields, formData);
     container.appendChild(form);
-    // Save on change
     form.querySelectorAll('input, select').forEach(el => {
       el.addEventListener('change', () => {
         const data = collectFormData(form);
@@ -292,28 +295,7 @@ function renderNewForm(container) {
     });
   }
 
-  function renderParentStep(container) {
-    const fields = [
-      { key: 'fatherName', label: "Father's Name", required: true },
-      { key: 'motherName', label: "Mother's Name" },
-      { key: 'guardian', label: 'Guardian (if any)' },
-      { key: 'phone', label: 'Phone', required: true },
-      { key: 'emergencyContact', label: 'Emergency Contact' },
-      { key: 'email', label: 'Email' },
-      { key: 'address', label: 'Address' }
-    ];
-    const form = buildForm(fields, formData);
-    container.appendChild(form);
-    form.querySelectorAll('input, select').forEach(el => {
-      el.addEventListener('change', () => {
-        const data = collectFormData(form);
-        Object.assign(formData, data);
-        autoSave();
-      });
-    });
-  }
-
-  function renderAcademicStep(container) {
+  function renderEducationStep(container) {
     const fields = [
       { key: 'class', label: 'Class', type: 'select', options: CLASSES, required: true },
       { key: 'section', label: 'Section', type: 'select', options: SECTIONS },
@@ -332,7 +314,7 @@ function renderNewForm(container) {
     });
   }
 
-  function renderDocumentsStep(container) {
+  function renderUploadStep(container) {
     container.innerHTML = "";
     const uploadArea = el("div", { style: "display:grid;grid-template-columns:1fr 1fr;gap:12px;" });
     DOC_TYPES.forEach(doc => {
@@ -347,11 +329,8 @@ function renderNewForm(container) {
       fileInput.onchange = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
-        // Validate size and type
         if (file.size > 5*1024*1024) { toast({type:'error', title:'File too large', message:'Max 5MB'}); return; }
-        // Upload
         if (!admissionId) {
-          // Auto-create draft first
           const temp = await createAdmission(formData);
           admissionId = temp.id;
           formData = temp;
@@ -359,7 +338,6 @@ function renderNewForm(container) {
         try {
           const docEntry = await uploadAdmissionDocument(admissionId, doc.key, file);
           statusDisplay.textContent = `Uploaded: ${file.name} (${docEntry.status})`;
-          // Update formData
           const updated = await getAdmission(admissionId);
           Object.assign(formData, updated);
           toast({type:'success', title:'Uploaded'});
@@ -373,9 +351,47 @@ function renderNewForm(container) {
       uploadArea.appendChild(card);
     });
     container.appendChild(uploadArea);
+    // Add parent/guardian contact fields (they belong here or separate? We'll include them)
+    const contactFields = [
+      { key: 'fatherName', label: "Father's Name", required: true },
+      { key: 'motherName', label: "Mother's Name" },
+      { key: 'guardian', label: 'Guardian (if any)' },
+      { key: 'phone', label: 'Phone', required: true },
+      { key: 'emergencyContact', label: 'Emergency Contact' },
+      { key: 'email', label: 'Email' },
+      { key: 'address', label: 'Address' }
+    ];
+    const contactForm = buildForm(contactFields, formData);
+    container.appendChild(el("div", { style: "margin-top:16px;", text: "Contact Details" }));
+    container.appendChild(contactForm);
+    contactForm.querySelectorAll('input, select').forEach(el => {
+      el.addEventListener('change', () => {
+        const data = collectFormData(contactForm);
+        Object.assign(formData, data);
+        autoSave();
+      });
+    });
   }
 
-  function renderReviewStep(container) {
+  function renderPaymentStep(container) {
+    container.innerHTML = "";
+    const grid = el("div", { class: "form-grid" });
+    FEE_TYPES.forEach(ft => {
+      const row = el("div", { class: "form-row" });
+      row.appendChild(el("label", { html: ft.label }));
+      const inp = el("input", { type: "number", class: "input", placeholder: "0.00", "data-key": `fee_${ft.key}` });
+      inp.value = formData[`fee_${ft.key}`] || '';
+      inp.addEventListener('change', () => {
+        formData[`fee_${ft.key}`] = inp.value;
+        autoSave();
+      });
+      row.appendChild(inp);
+      grid.appendChild(row);
+    });
+    container.appendChild(grid);
+  }
+
+  function renderFinalStep(container) {
     container.innerHTML = "";
     const summary = el("div", { class: "card", style: "padding:16px;" });
     const fields = ['studentName', 'gender', 'dob', 'class', 'section', 'fatherName', 'phone', 'address'];
@@ -392,7 +408,6 @@ function renderNewForm(container) {
       ]));
     });
     container.appendChild(summary);
-    // Validation errors
     const errors = validateAdmission(formData, formData.documents || []);
     if (errors.length) {
       const errDiv = el("div", { class: "card", style: "padding:12px;margin-top:12px;border-color:var(--danger);" });
@@ -404,7 +419,19 @@ function renderNewForm(container) {
     }
   }
 
-  // Helper: build form from fields
+  function renderPrintStep(container) {
+    container.innerHTML = "";
+    if (!admissionId) {
+      container.appendChild(el("div", { class: "state", text: "No admission to print." }));
+      return;
+    }
+    const printBtn = el("button", { class: "btn btn-primary", text: "Print Admission Form" });
+    printBtn.onclick = () => openAdmissionPrint(admissionId);
+    container.appendChild(printBtn);
+    container.appendChild(el("div", { style: "margin-top:16px;", text: `Admission #${formData.admissionNumber || '—'} successfully submitted.` }));
+  }
+
+  // Helpers
   function buildForm(fields, data) {
     const form = el("div", { class: "form-grid" });
     fields.forEach(f => {
@@ -438,20 +465,15 @@ function renderNewForm(container) {
 
   async function autoSave() {
     if (!admissionId) {
-      // Create draft
       try {
         const created = await createAdmission(formData);
         admissionId = created.id;
         Object.assign(formData, created);
-      } catch(e) {
-        console.warn('Auto-save failed:', e);
-      }
+      } catch(e) { console.warn('Auto-save failed:', e); }
     } else {
       try {
         await updateAdmission(admissionId, formData);
-      } catch(e) {
-        console.warn('Auto-save failed:', e);
-      }
+      } catch(e) { console.warn('Auto-save failed:', e); }
     }
   }
 
@@ -469,26 +491,23 @@ function renderNewForm(container) {
       await updateAdmission(admissionId, { status: STATUSES.SUBMITTED });
       await addAuditLog(admissionId, 'Application submitted');
       toast({ type: 'success', title: 'Admission submitted successfully' });
-      // Reset
-      admissionId = null;
-      formData = {};
-      currentStep = 0;
-      renderNewForm(container.parentElement); // re-render
+      // Move to print step
+      currentStep = steps.length - 1; // print step
+      const updated = await getAdmission(admissionId);
+      Object.assign(formData, updated);
+      renderStep(currentStep);
     } catch(e) {
       toast({ type: 'error', title: 'Submission failed', message: e.message });
     }
   }
 
-  // Load existing admission if editing (we could pass id via query)
-  // For now, start fresh
   renderStep(0);
 }
 
-// ---------- View Detail / Workflow ----------
+// ---------- Detail View ----------
 async function openAdmissionDetail(id) {
   const admission = await getAdmission(id);
   if (!admission) { toast({type:'error', title:'Not found'}); return; }
-  // Show a modal with full details
   const body = el("div", { style: "padding:12px;max-height:500px;overflow:auto;" });
   const details = [
     ['Admission #', admission.admissionNumber],
@@ -518,7 +537,7 @@ async function openAdmissionDetail(id) {
   });
   body.appendChild(docList);
 
-  // Actions
+  // Actions (workflow buttons)
   const actions = el("div", { style: "display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;" });
   if (admission.status === STATUSES.SUBMITTED) {
     const verifyBtn = el("button", { class: "btn btn-primary", text: "Start Verification" });
@@ -530,7 +549,6 @@ async function openAdmissionDetail(id) {
     actions.appendChild(verifyBtn);
   }
   if (admission.status === STATUSES.DOC_VERIFICATION) {
-    // Document verification UI
     const docVer = el("div", { style: "margin:8px 0;" });
     (admission.documents || []).forEach(d => {
       const row = el("div", { style: "display:flex;gap:8px;align-items:center;margin:4px 0;" }, [
@@ -608,14 +626,12 @@ async function openAdmissionDetail(id) {
   }
 
   body.appendChild(actions);
-
   openModal({ title: `Admission #${admission.admissionNumber}`, body, size: 'large' });
 }
 
 async function openAdmissionPrint(id) {
   const admission = await getAdmission(id);
   if (!admission) return;
-  // Generate QR code image
   const token = generateQRToken(id);
   const qrContainer = el('div');
   new QRCode(qrContainer, {
@@ -627,7 +643,6 @@ async function openAdmissionPrint(id) {
   openAdmissionPrint(admission, qrImage);
 }
 
-// Tab button helper
 function tabBtn(label, active) {
   return el("button", { class: `btn ${active ? "btn-primary" : "btn-outline"}`, text: label });
 }
