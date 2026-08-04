@@ -1,132 +1,117 @@
-// Attendance data layer – separate module to avoid collisions
-import { db, PATH, dbRef, get, set, update, remove, onValue, query, orderByChild } from "./firebase.js";
-
-const ATTENDANCE_PATH = `${PATH.students.replace(/\/students$/, '')}/attendance`;
-
-/**
- * Save attendance records for a specific date and type
- * @param {string} date - ISO date string (YYYY-MM-DD)
- * @param {string} type - 'students' or 'teachers'
- * @param {object} records - { id: status } where status is 'present', 'absent', 'late', or 'leave'
- */
-export async function saveAttendance(date, type, records) {
-  const path = `${ATTENDANCE_PATH}/${type}/${date}`;
-  const ref = dbRef(db, path);
-  await set(ref, records);
-  return records;
-}
-
-/**
- * Get attendance records for a specific date and type
- * @param {string} date - ISO date string (YYYY-MM-DD)
- * @param {string} type - 'students' or 'teachers'
- * @returns {Promise<object>} - { id: status }
- */
-export async function getAttendance(date, type) {
-  const path = `${ATTENDANCE_PATH}/${type}/${date}`;
-  const ref = dbRef(db, path);
-  const snap = await get(ref);
-  return snap.exists() ? snap.val() : {};
-}
-
-/**
- * Subscribe to attendance records for a specific date and type
- * @param {string} date - ISO date string (YYYY-MM-DD)
- * @param {string} type - 'students' or 'teachers'
- * @param {function} cb - Callback with attendance data
- * @returns {function} - Unsubscribe function
- */
-export function subscribeAttendance(date, type, cb) {
-  const path = `${ATTENDANCE_PATH}/${type}/${date}`;
-  const ref = dbRef(db, path);
-  const off = onValue(ref, (snap) => {
-    cb(snap.exists() ? snap.val() : {});
+// PDF utilities — generates a true digital PDF with selectable text
+export async function elementToPdf(node, filename = "document.pdf") {
+  if (!window.html2canvas || !window.jspdf) {
+    alert("PDF library still loading, please try again.");
+    return;
+  }
+  if (!node.isConnected) {
+    document.body.appendChild(node);
+  }
+  const canvas = await window.html2canvas(node, {
+    scale: 2,
+    backgroundColor: "#ffffff",
+    useCORS: true,
+    logging: false,
+    width: node.scrollWidth,
+    height: node.scrollHeight,
+    windowWidth: node.scrollWidth,
+    windowHeight: node.scrollHeight
   });
-  return off;
-}
-
-/**
- * Get attendance summary for a student
- * @param {string} studentId - Student ID
- * @param {string} month - ISO month string (YYYY-MM)
- * @returns {Promise<object>} - { present, absent, late, leave, total }
- */
-export async function getStudentAttendanceSummary(studentId, month) {
-  const path = `${ATTENDANCE_PATH}/students`;
-  const ref = dbRef(db, path);
-  const snap = await get(ref);
-  if (!snap.exists()) return { present: 0, absent: 0, late: 0, leave: 0, total: 0 };
-
-  const data = snap.val();
-  const summary = { present: 0, absent: 0, late: 0, leave: 0, total: 0 };
-  const monthPrefix = month || new Date().toISOString().slice(0, 7);
-
-  for (const [date, records] of Object.entries(data)) {
-    if (!date.startsWith(monthPrefix)) continue;
-    const status = records[studentId];
-    if (status) {
-      summary[status] = (summary[status] || 0) + 1;
-      summary.total += 1;
+  const textNodes = getTextNodes(node);
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  const margin = 15;
+  const maxWidth = pageWidth - margin * 2;
+  const maxHeight = pageHeight - margin * 2;
+  const imgWidth = canvas.width;
+  const imgHeight = canvas.height;
+  const scale = maxWidth / imgWidth;
+  const scaledHeight = imgHeight * scale;
+  const totalHeight = scaledHeight;
+  const pageContentHeight = maxHeight;
+  const numPages = Math.max(1, Math.ceil(totalHeight / pageContentHeight));
+  for (let pageIndex = 0; pageIndex < numPages; pageIndex++) {
+    if (pageIndex > 0) pdf.addPage();
+    const offsetY = pageIndex * (pageContentHeight / scale);
+    const cropHeight = Math.min(imgHeight - offsetY, pageContentHeight / scale);
+    const pageCanvas = document.createElement("canvas");
+    pageCanvas.width = imgWidth;
+    pageCanvas.height = cropHeight;
+    const ctx = pageCanvas.getContext("2d");
+    ctx.drawImage(canvas, 0, offsetY, imgWidth, cropHeight, 0, 0, imgWidth, cropHeight);
+    const imgData = pageCanvas.toDataURL("image/png");
+    const pageImgWidth = maxWidth;
+    const pageImgHeight = (cropHeight / imgWidth) * maxWidth;
+    pdf.addImage(imgData, "PNG", margin, margin, pageImgWidth, pageImgHeight);
+    const pageStartY = offsetY;
+    const pageEndY = offsetY + cropHeight;
+    const pageTextNodes = textNodes.filter(tn => {
+      const rect = tn.rect;
+      const centerY = rect.top + rect.height / 2;
+      return centerY >= pageStartY && centerY <= pageEndY;
+    });
+    pdf.setTextRenderingMode(3);
+    pdf.setFont("helvetica", "normal");
+    for (const tn of pageTextNodes) {
+      const rect = tn.rect;
+      const x = margin + (rect.left / imgWidth) * maxWidth;
+      const y = margin + ((rect.top - offsetY) / imgWidth) * maxWidth + (rect.height / imgWidth) * maxWidth;
+      const fontSize = (rect.height / imgWidth) * maxWidth * 0.7;
+      pdf.setFontSize(Math.max(fontSize, 6));
+      pdf.text(tn.text, x, y);
     }
   }
-  return summary;
+  pdf.save(filename);
 }
 
-/**
- * Get attendance summary for a teacher
- * @param {string} teacherId - Teacher ID
- * @param {string} month - ISO month string (YYYY-MM)
- * @returns {Promise<object>} - { present, absent, late, leave, total }
- */
-export async function getTeacherAttendanceSummary(teacherId, month) {
-  const path = `${ATTENDANCE_PATH}/teachers`;
-  const ref = dbRef(db, path);
-  const snap = await get(ref);
-  if (!snap.exists()) return { present: 0, absent: 0, late: 0, leave: 0, total: 0 };
-
-  const data = snap.val();
-  const summary = { present: 0, absent: 0, late: 0, leave: 0, total: 0 };
-  const monthPrefix = month || new Date().toISOString().slice(0, 7);
-
-  for (const [date, records] of Object.entries(data)) {
-    if (!date.startsWith(monthPrefix)) continue;
-    const status = records[teacherId];
-    if (status) {
-      summary[status] = (summary[status] || 0) + 1;
-      summary.total += 1;
-    }
-  }
-  return summary;
-}
-
-/**
- * Get monthly attendance statistics for a class
- * @param {string} className - Class name
- * @param {string} section - Section
- * @param {string} month - ISO month string (YYYY-MM)
- * @param {Array} students - Array of student objects with id
- * @returns {Promise<object>} - { present, absent, late, leave, total }
- */
-export async function getClassAttendanceSummary(className, section, month, students) {
-  const path = `${ATTENDANCE_PATH}/students`;
-  const ref = dbRef(db, path);
-  const snap = await get(ref);
-  if (!snap.exists()) return { present: 0, absent: 0, late: 0, leave: 0, total: 0 };
-
-  const data = snap.val();
-  const summary = { present: 0, absent: 0, late: 0, leave: 0, total: 0 };
-  const monthPrefix = month || new Date().toISOString().slice(0, 7);
-  const studentIds = students.map(s => s.id);
-
-  for (const [date, records] of Object.entries(data)) {
-    if (!date.startsWith(monthPrefix)) continue;
-    for (const studentId of studentIds) {
-      const status = records[studentId];
-      if (status) {
-        summary[status] = (summary[status] || 0) + 1;
-        summary.total += 1;
+function getTextNodes(container) {
+  const result = [];
+  const walker = document.createTreeWalker(
+    container,
+    NodeFilter.SHOW_TEXT,
+    { acceptNode: function(node) {
+        const text = node.textContent.trim();
+        if (text.length === 0) return NodeFilter.FILTER_REJECT;
+        return NodeFilter.FILTER_ACCEPT;
       }
     }
+  );
+  const containerRect = container.getBoundingClientRect();
+  let node;
+  while ((node = walker.nextNode())) {
+    const range = document.createRange();
+    range.selectNode(node);
+    const rects = range.getClientRects();
+    for (let rect of rects) {
+      const relative = {
+        left: rect.left - containerRect.left,
+        top: rect.top - containerRect.top,
+        width: rect.width,
+        height: rect.height
+      };
+      result.push({ text: node.textContent.trim(), rect: relative });
+    }
   }
-  return summary;
+  return result;
+}
+
+export function printNode(node) {
+  const printWin = window.open("", "print", "width=900,height=700");
+  const styles = Array.from(document.styleSheets).map(s => {
+    try { return Array.from(s.cssRules).map(r => r.cssText).join("\n"); } catch { return ""; }
+  }).join("\n");
+  printWin.document.write(`
+    <html><head><title>Print</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
+    <style>${styles}
+      body { margin: 0; padding: 20px; background:#fff; font-family: 'Inter', sans-serif; }
+      @page { size: A4; margin: 15mm; }
+      .section { break-inside: avoid; }
+    </style>
+    </head><body>${node.outerHTML}</body></html>
+  `);
+  printWin.document.close();
+  setTimeout(() => { printWin.focus(); printWin.print(); printWin.close(); }, 400);
 }
