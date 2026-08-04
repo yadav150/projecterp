@@ -14,7 +14,6 @@ export function AdministrationView() {
   setCrumbs([{ label: "Administration" }]);
   const page = el("div", { "data-testid": "administration-view" });
 
-  // Header
   page.appendChild(el("div", { class: "page-header" }, [
     el("div", {}, [
       el("h1", { class: "page-title", text: "Administration" }),
@@ -22,7 +21,6 @@ export function AdministrationView() {
     ])
   ]));
 
-  // Tabs
   const tabs = el("div", { style: "display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;" });
   const tabNames = ['Reports', 'Import Export', 'ID Cards', 'Certificates'];
   const tabButtons = {};
@@ -42,7 +40,6 @@ export function AdministrationView() {
   });
   page.appendChild(tabs);
 
-  // Switch tabs
   function switchTab(name) {
     Object.keys(tabButtons).forEach(key => {
       const btn = tabButtons[key];
@@ -64,7 +61,6 @@ export function AdministrationView() {
     tabButtons[name].onclick = () => switchTab(name);
   });
 
-  // Subscribe to data
   unsubs = [
     subscribeStudents(v => { students = v || []; }),
     subscribeTeachers(v => { teachers = v || []; }),
@@ -74,9 +70,7 @@ export function AdministrationView() {
 
   page.addEventListener("view:unmount", () => unsubs.forEach(u => u && u()));
 
-  // Initial render
   renderReports(containers['Reports']);
-
   return page;
 }
 
@@ -84,7 +78,6 @@ export function AdministrationView() {
 function renderReports(container) {
   container.innerHTML = "";
 
-  // Filters
   const filterBar = el("div", { class: "filter-bar" });
   const startDate = el("input", { type: "date", class: "input", value: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0,10) });
   const endDate = el("input", { type: "date", class: "input", value: todayISO() });
