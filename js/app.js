@@ -8,7 +8,7 @@ import { FeesView } from "./views/fees.js";
 import { SalaryView } from "./views/salary.js";
 import { ReceiptsView } from "./views/receipts.js";
 
-const routes = {
+const routes = window.__routes = {
   dashboard: () => DashboardView(),
   students: (p) => StudentsView(p),
   admission: () => AdmissionView(),
@@ -17,6 +17,12 @@ const routes = {
   salary: () => SalaryView(),
   receipts: () => ReceiptsView()
 };
+
+// Apply any pending routes that were registered before app.js loaded
+if (window.__pendingRoutes) {
+  Object.assign(routes, window.__pendingRoutes);
+  window.__pendingRoutes = null;
+}
 
 const page = document.getElementById("page");
 const navItems = () => Array.from(document.querySelectorAll(".nav-item"));
