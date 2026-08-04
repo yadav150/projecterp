@@ -1,5 +1,6 @@
-// App entry: router + view lifecycle – DO NOT MODIFY
+// App entry: router + view lifecycle – with real-time Firebase connection monitor
 import { firebaseHealthCheck } from "./firebase.js";
+import { db, dbRef, onValue } from "./firebase.js"; // import db and dbRef
 import { DashboardView } from "./views/dashboard.js";
 import { StudentsView } from "./views/students.js";
 import { AdmissionView } from "./views/admission.js";
@@ -52,11 +53,37 @@ window.addEventListener("DOMContentLoaded", () => {
   document.getElementById("menu-btn").addEventListener("click", () => {
     document.getElementById("sidebar").classList.toggle("open");
   });
+
+  // ---- Real-time Firebase connection monitor ----
+  const statusEl = document.querySelector(".fw-status");
+  const txt = document.getElementById("fw-status-text");
+
+  // Set initial state
+  statusEl.classList.remove("online", "error");
+  txt.textContent = "Connecting…";
+
+  // Listen to .info/connected for real-time updates
+  const connectedRef = dbRef(db, ".info/connected");
+  onValue(connectedRef, (snap) => {
+    const connected = snap.val();
+    if (connected === true) {
+      statusEl.classList.add("online");
+      statusEl.classList.remove("error");
+      txt.textContent = "Connected to Firebase";
+    } else {
+      statusEl.classList.add("error");
+      statusEl.classList.remove("online");
+      txt.textContent = "Firebase unreachable";
+    }
+  });
+
+  // Also run the health check once (for extra validation and to create the _meta node if needed)
   firebaseHealthCheck().then(ok => {
-    const statusEl = document.querySelector(".fw-status");
-    const txt = document.getElementById("fw-status-text");
-    if (ok) { statusEl.classList.add("online"); txt.textContent = "Connected to Firebase"; }
-    else { statusEl.classList.add("error"); txt.textContent = "Firebase unreachable"; }
+    if (ok) {
+      statusEl.classList.add("online");
+      statusEl.classList.remove("error");
+      txt.textContent = "Connected to Firebase";
+    }
   });
 });
 
