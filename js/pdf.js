@@ -95,8 +95,8 @@ export async function elementToPdf(node, filename = "document.pdf") {
       const x = margin + (rect.left / imgWidth) * maxWidth;
       const y = margin + ((rect.top - offsetY) / imgWidth) * maxWidth + (rect.height / imgWidth) * maxWidth;
       // Determine font size (approximate from height)
-      const fontSize = (rect.height / imgWidth) * maxWidth * 0.7; // adjust factor
-      pdf.setFontSize(Math.max(fontSize, 6)); // min 6pt
+      const fontSize = (rect.height / imgWidth) * maxWidth * 0.7;
+      pdf.setFontSize(Math.max(fontSize, 6));
       pdf.text(tn.text, x, y);
     }
   }
@@ -131,7 +131,6 @@ function getTextNodes(container) {
     range.selectNode(node);
     const rects = range.getClientRects();
     for (let rect of rects) {
-      // Convert to coordinates relative to container
       const relative = {
         left: rect.left - containerRect.left,
         top: rect.top - containerRect.top,
@@ -154,9 +153,9 @@ export function printNode(node) {
   }).join("\n");
   printWin.document.write(`
     <html><head><title>Print</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
     <style>${styles}
-      body { margin: 0; padding: 20px; background:#fff; font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
+      body { margin: 0; padding: 20px; background:#fff; font-family: 'Inter', sans-serif; }
       @page { size: A4; margin: 15mm; }
       .section { break-inside: avoid; }
     </style>
