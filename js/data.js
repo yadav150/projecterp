@@ -1,7 +1,7 @@
 // Data layer using Realtime Database
 import {
   db, PATH, dbRef, push, set, update, remove, get, onValue,
-  nextCounter, uploadPhoto
+  nextCounter, uploadPhoto, sRef, uploadBytes, getDownloadURL, deleteFile
 } from "./firebase.js";
 
 function nowMs() { return Date.now(); }
@@ -38,6 +38,7 @@ export async function createStudent(payload, photoFile) {
     admissionNumber,
     status: payload.status || "Active",
     photoUrl: null,
+    documents: [],
     createdAt: nowMs(),
     updatedAt: nowMs()
   };
@@ -109,3 +110,53 @@ export async function recordSalaryPayment(payload) {
 export async function deleteSalary(id) { await remove(dbRef(db, `${PATH.salaries}/${id}`)); }
 export async function getSalary(id) { return getById(PATH.salaries, id); }
 export function subscribeSalaries(cb) { return subscribeCollection(PATH.salaries, cb); }
+
+// ---------- Student Documents ----------
+export async function addStudentDocument(studentId, file) {
+  if (!file) return null;
+  const docId = `doc_${Date.now()}`;
+  const path = `students/${studentId}/documents/${docId}_${file.name.replace(/\s+/g, "_")}`;
+  const r = sRef(storage, path);
+  await uploadBytes(r, file);
+  const url = await getDownloadURL(r);
+  const docData = {
+    id: docId,
+    name: file.name,
+    size: file.size,
+    type: file.type,
+    url: url,
+    uploadedAt: nowMs()
+  };
+  const studentRef = dbRef(db, `${PATH.students}/${studentId}`);
+  const snap = await get(studentRef);
+  const currentDocs = snap.val()?.documents || [];
+  const updatedDocs = [...currentDocs, docData];
+  await update(studentRef, { documents: updatedDocs });
+  return docData;
+}
+
+export async function removeStudentDocument(studentId, docId) {
+  const studentRef = dbRef(db, `${PATH.students}/${studentId}`);
+  const snap = await get(studentRef);
+  const student = snap.val();
+  if (!student || !student.documents) return;
+  const doc = student.documents.find(d => d.id === docId);
+  if (doc && doc.url) {
+    await deleteFile(doc.url);
+  }
+  const updatedDocs = student.documents.filter(d => d.id !== docId);
+  await update(studentRef, { documents: updatedDocs });
+}
+
+export async function updateStudentPhoto(studentId, photoFile) {
+  if (!photoFile) return null;
+  const studentRef = dbRef(db, `${PATH.students}/${studentId}`);
+  const snap = await get(studentRef);
+  const student = snap.val();
+  if (student && student.photoUrl) {
+    await deleteFile(student.photoUrl);
+  }
+  const photoUrl = await uploadPhoto("students", studentId, photoFile);
+  await update(studentRef, { photoUrl });
+  return photoUrl;
+}
