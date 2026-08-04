@@ -1,4 +1,4 @@
-// App entry: router + view lifecycle
+// App entry: router + view lifecycle – DO NOT MODIFY
 import { firebaseHealthCheck } from "./firebase.js";
 import { DashboardView } from "./views/dashboard.js";
 import { StudentsView } from "./views/students.js";
@@ -8,7 +8,6 @@ import { FeesView } from "./views/fees.js";
 import { SalaryView } from "./views/salary.js";
 import { ReceiptsView } from "./views/receipts.js";
 
-// Define routes and expose them globally for router-extend.js
 const routes = window.__routes = {
   dashboard: () => DashboardView(),
   students: (p) => StudentsView(p),
@@ -19,7 +18,6 @@ const routes = window.__routes = {
   receipts: () => ReceiptsView()
 };
 
-// Apply any pending routes that were registered before app.js loaded
 if (window.__pendingRoutes) {
   Object.assign(routes, window.__pendingRoutes);
   window.__pendingRoutes = null;
@@ -39,13 +37,11 @@ function render() {
   const { route, id } = parseHash();
   navItems().forEach(a => a.classList.toggle("active", a.dataset.route === route));
   const factory = routes[route] || routes.dashboard;
-  // unmount previous
   const prev = page.firstChild;
   if (prev) prev.dispatchEvent(new CustomEvent("view:unmount"));
   page.innerHTML = "";
   const node = factory({ id });
   page.appendChild(node);
-  // mobile: close sidebar after nav
   document.getElementById("sidebar").classList.remove("open");
 }
 
@@ -56,7 +52,6 @@ window.addEventListener("DOMContentLoaded", () => {
   document.getElementById("menu-btn").addEventListener("click", () => {
     document.getElementById("sidebar").classList.toggle("open");
   });
-  // Firebase status
   firebaseHealthCheck().then(ok => {
     const statusEl = document.querySelector(".fw-status");
     const txt = document.getElementById("fw-status-text");
@@ -65,7 +60,6 @@ window.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-// Kick off if DOMContentLoaded already fired
 if (document.readyState !== "loading") {
   window.dispatchEvent(new Event("DOMContentLoaded"));
 }
