@@ -23,6 +23,7 @@ export const app = initializeApp(firebaseConfig);
 export const db = getDatabase(app);
 export const storage = getStorage(app);
 
+// EXPORT ALL REQUIRED FUNCTIONS – FIX FOR BLANK PAGE
 export {
   dbRef,
   push,
