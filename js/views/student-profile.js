@@ -10,10 +10,21 @@ import { studentFormFields, validateStudent } from "./students.js";
  * @param {HTMLElement} container - Container element to render into
  */
 export function renderStudentProfile(id, container) {
+  // Cleanup flag to prevent updates after unmount
+  let canceled = false;
+
+  // Listen for unmount event to cancel pending operations
+  const cleanup = () => { canceled = true; };
+  container.addEventListener('view:unmount', cleanup);
+
+  // Clear and show loading
   container.innerHTML = "";
   container.appendChild(loadingState("Loading student…"));
 
   getStudent(id).then(r => {
+    // If component was unmounted, do nothing
+    if (canceled) return;
+
     container.innerHTML = "";
     if (!r) {
       container.appendChild(el("div", { class: "state", text: "Student not found" }));
@@ -81,7 +92,17 @@ export function renderStudentProfile(id, container) {
     // ---- Documents Section ----
     container.appendChild(documentsSection(student));
   });
+
+  // Return a cleanup function for manual cleanup (optional)
+  return () => {
+    canceled = true;
+    container.removeEventListener('view:unmount', cleanup);
+  };
 }
+
+// ============================================================
+// Helper components (unchanged)
+// ============================================================
 
 function sectionCard(title, pairs) {
   const card = el("div", { class: "card", style: "margin-bottom:16px;" });
@@ -91,7 +112,7 @@ function sectionCard(title, pairs) {
   pairs.forEach(([label, value]) => {
     grid.appendChild(el("div", { class: "detail-row" }, [
       el("div", { class: "k", text: label }),
-      el("div", { class: "v", text: value })
+      el("div", { class: "v", text: value || "—" })
     ]));
   });
   body.appendChild(grid);
@@ -130,6 +151,7 @@ function photoSection(student) {
       avatar.innerHTML = "";
       avatar.appendChild(el("img", { src: newUrl, alt: student.name }));
       toast({ type: "success", title: "Photo updated" });
+      // Re-render profile to reflect any related changes (optional, could just update avatar)
       const container = wrap.closest('[data-profile-root]');
       if (container) renderStudentProfile(student.id, container);
     } catch (err) {
@@ -155,7 +177,7 @@ function documentsSection(student) {
   const docs = student.documents || [];
   if (!docs.length) {
     body.appendChild(el("div", { class: "state", style: "padding:20px;" }, [
-      el("div", { html: ICON.inbox }),
+      el("div", { html: ICON.inbox || "📥" }),
       el("div", { class: "state-sub", text: "No documents uploaded." })
     ]));
   } else {
@@ -168,7 +190,7 @@ function documentsSection(student) {
         ]),
         el("div", { style: "display:flex;gap:6px;flex-shrink:0;" }, [
           el("a", { href: doc.url, target: "_blank", class: "btn btn-sm btn-outline", text: "Preview" }),
-          el("a", { href: doc.url, download: doc.name, class: "btn btn-sm btn-outline", html: ICON.download }),
+          el("a", { href: doc.url, download: doc.name, class: "btn btn-sm btn-outline", html: ICON.download || "⬇" }),
           el("button", { class: "btn btn-sm btn-danger", onclick: async () => {
             if (await confirmDialog({ title: "Delete document?", message: `Are you sure you want to delete "${doc.name}"?` })) {
               await removeStudentDocument(student.id, doc.id);
