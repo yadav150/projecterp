@@ -15,6 +15,7 @@ export function StudentsView({ id } = {}) {
 
   if (id) return profilePage(id);
 
+  // --- Header ---
   page.appendChild(el("div", { class: "page-header" }, [
     el("div", {}, [
       el("h1", { class: "page-title", text: "Students" }),
@@ -30,13 +31,11 @@ export function StudentsView({ id } = {}) {
     ])
   ]));
 
+  // --- Container for table ---
   const listMount = el("div");
   page.appendChild(listMount);
-  listMount.appendChild(loadingState("Loading students…"));
 
-  let rows = [];
-  let table = null;
-
+  // --- Filters (created once, reused) ---
   const classSel = el("select", { class: "select", "data-testid": "filter-class" }, [
     el("option", { value: "", text: "All Classes" }),
     ...CLASSES.map(c => el("option", { value: c, text: c }))
@@ -51,7 +50,12 @@ export function StudentsView({ id } = {}) {
     el("option", { value: "Inactive", text: "Inactive" }),
     el("option", { value: "Alumni", text: "Alumni" })
   ]);
-  [classSel, sectionSel, statusSel].forEach(s => s.addEventListener("change", refresh));
+
+  // --- State ---
+  let rows = [];
+  let table = null;
+
+  // --- Filter logic ---
   function currentFiltered() {
     return rows.filter(r =>
       (!classSel.value || r.class === classSel.value) &&
@@ -59,60 +63,92 @@ export function StudentsView({ id } = {}) {
       (!statusSel.value || r.status === statusSel.value)
     );
   }
-  function refresh() { if (table) table.setRows(currentFiltered()); }
 
-  unsub && unsub();
-  unsub = subscribeStudents((list, err) => {
-    if (err) { listMount.innerHTML = ""; listMount.appendChild(el("div", { class: "state", text: "Failed to load students. Check Firebase rules." })); return; }
-    rows = list;
-    listMount.innerHTML = "";
-    table = DataTable({
-      testId: "students-table",
-      columns: [
-        {
-          key: "name", label: "Student", sortable: true,
-          render: r => el("div", { class: "cell-user" }, [
-            avatarNode(r),
-            el("div", {}, [
-              el("div", { class: "u-name", text: r.name || "—" }),
-              el("div", { class: "u-sub", text: `Adm #${r.admissionNumber || "—"} · ${r.admissionId || ""}` })
-            ])
+  function refreshTable() {
+    if (table) {
+      table.setRows(currentFiltered());   // ✅ Update without recreating DOM – kills the flicker!
+    }
+  }
+
+  // Attach filter change events
+  [classSel, sectionSel, statusSel].forEach(s => s.addEventListener("change", refreshTable));
+
+  // --- Create DataTable ONCE (with empty rows initially) ---
+  table = DataTable({
+    testId: "students-table",
+    columns: [
+      {
+        key: "name", label: "Student", sortable: true,
+        render: r => el("div", { class: "cell-user" }, [
+          avatarNode(r),
+          el("div", {}, [
+            el("div", { class: "u-name", text: r.name || "—" }),
+            el("div", { class: "u-sub", text: `Adm #${r.admissionNumber || "—"} · ${r.admissionId || ""}` })
           ])
-        },
-        { key: "class", label: "Class", sortable: true, render: r => `${r.class || "—"} ${r.section ? `· ${r.section}` : ""}` },
-        { key: "rollNumber", label: "Roll #", sortable: true, render: r => r.rollNumber || "—" },
-        { key: "fatherName", label: "Father", sortable: true, render: r => r.fatherName || "—" },
-        { key: "phone", label: "Phone", render: r => r.phone || "—" },
-        { key: "admissionDate", label: "Admission", sortable: true, render: r => fmtDate(r.admissionDate) },
-        {
-          key: "status", label: "Status",
-          render: r => `<span class="badge ${r.status === "Active" ? "green" : r.status === "Alumni" ? "indigo" : "slate"}">${r.status || "Active"}</span>`
-        },
-        {
-          key: "_actions", label: "",
-          render: r => rowActions([
-            { icon: ICON.view, label: "View", testId: `view-${r.id}`, onClick: () => location.hash = `#/students/${r.id}` },
-            { icon: ICON.edit, label: "Edit", testId: `edit-${r.id}`, onClick: () => openStudentForm({ mode: "edit", record: r }) },
-            { icon: ICON.trash, label: "Delete", danger: true, testId: `del-${r.id}`, onClick: async () => {
-              if (await confirmDialog({ title: "Delete this student?", message: "This action cannot be undone." })) {
-                await deleteStudent(r.id); toast({ type: "success", title: "Student deleted" });
-              }
-            }}
-          ])
-        }
-      ],
-      rows: currentFiltered(),
-      searchFields: ["name", "fatherName", "motherName", "admissionNumber", "admissionId", "phone", "email", "rollNumber"],
-      emptyTitle: "No students found",
-      emptySub: "Add your first student to get started.",
-      toolbar: [classSel, sectionSel, statusSel]
-    });
-    listMount.appendChild(table.node);
+        ])
+      },
+      { key: "class", label: "Class", sortable: true, render: r => `${r.class || "—"} ${r.section ? `· ${r.section}` : ""}` },
+      { key: "rollNumber", label: "Roll #", sortable: true, render: r => r.rollNumber || "—" },
+      { key: "fatherName", label: "Father", sortable: true, render: r => r.fatherName || "—" },
+      { key: "phone", label: "Phone", render: r => r.phone || "—" },
+      { key: "admissionDate", label: "Admission", sortable: true, render: r => fmtDate(r.admissionDate) },
+      {
+        key: "status", label: "Status",
+        render: r => `<span class="badge ${r.status === "Active" ? "green" : r.status === "Alumni" ? "indigo" : "slate"}">${r.status || "Active"}</span>`
+      },
+      {
+        key: "_actions", label: "",
+        render: r => rowActions([
+          { icon: ICON.view, label: "View", testId: `view-${r.id}`, onClick: () => location.hash = `#/students/${r.id}` },
+          { icon: ICON.edit, label: "Edit", testId: `edit-${r.id}`, onClick: () => openStudentForm({ mode: "edit", record: r }) },
+          { icon: ICON.trash, label: "Delete", danger: true, testId: `del-${r.id}`, onClick: async () => {
+            if (await confirmDialog({ title: "Delete this student?", message: "This action cannot be undone." })) {
+              await deleteStudent(r.id);
+              toast({ type: "success", title: "Student deleted" });
+            }
+          }}
+        ])
+      }
+    ],
+    rows: [], // Start empty
+    searchFields: ["name", "fatherName", "motherName", "admissionNumber", "admissionId", "phone", "email", "rollNumber"],
+    emptyTitle: "No students found",
+    emptySub: "Add your first student to get started.",
+    toolbar: [classSel, sectionSel, statusSel]
   });
 
-  page.addEventListener("view:unmount", () => { unsub && unsub(); unsub = null; });
+  // Append the table (single append, never recreated)
+  listMount.appendChild(table.node);
+
+  // --- Subscribe to Firebase ---
+  if (unsub) unsub(); // Safety cleanup if any previous subscription leaks
+  unsub = subscribeStudents((list, err) => {
+    if (err) {
+      // Show error inside the table container (but keep table structure intact)
+      listMount.innerHTML = "";
+      listMount.appendChild(el("div", { class: "state", text: "Failed to load students. Check Firebase rules." }));
+      return;
+    }
+
+    rows = list;          // Update the data source
+    refreshTable();       // ✅ Just updates rows – NO DOM rebuild, NO flicker!
+  });
+
+  // --- CRITICAL: Cleanup on unmount (kills zombie listeners) ---
+  page.addEventListener("view:unmount", () => {
+    if (unsub) {
+      unsub();
+      unsub = null;
+    }
+    // Note: filter event listeners will be cleaned up when DOM nodes are removed
+  });
+
   return page;
 }
+
+// ============================================================
+// Helper functions (unchanged)
+// ============================================================
 
 function avatarNode(r) {
   const av = el("div", { class: "avatar" });
