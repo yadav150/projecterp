@@ -42,7 +42,7 @@ export function subscribeAttendance(date, type, cb) {
   const off = onValue(ref, (snap) => {
     cb(snap.exists() ? snap.val() : {});
   });
-  return off;
+  return off; // ✅ Returns unsubscribe function – CORRECT
 }
 
 /**
