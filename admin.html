@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Login · Janaki Professional Academy</title>
+  <style>
+    /* ---------- Reset & Base ---------- */
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      height: 100%;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: #f0f4f8;
+      color: #1e293b;
+      font-size: 14px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ---------- Login Container ---------- */
+    .login-container {
+      width: 100%;
+      max-width: 400px;
+      padding: 20px;
+    }
+
+    .login-card {
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 40px 36px 36px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04);
+      border: 1px solid #e2e8f0;
+    }
+
+    .login-title {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #0f172a;
+      margin-bottom: 4px;
+    }
+
+    .login-subtitle {
+      font-size: 13.5px;
+      color: #64748b;
+      margin-bottom: 28px;
+    }
+
+    /* ---------- Form ---------- */
+    .form-group {
+      margin-bottom: 18px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #334155;
+      margin-bottom: 5px;
+    }
+
+    .form-group .input-field {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      font-size: 14px;
+      color: #0f172a;
+      background: #ffffff;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .form-group .input-field:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
+
+    .form-group .input-field.error {
+      border-color: #dc2626;
+      box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+    }
+
+    /* ---------- Error Message ---------- */
+    .error-message {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #b91c1c;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    .error-message.visible {
+      display: block;
+    }
+
+    /* ---------- Button ---------- */
+    .login-btn {
+      width: 100%;
+      padding: 11px 16px;
+      background: #2563eb;
+      color: #ffffff;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.05s;
+      font-family: inherit;
+      position: relative;
+    }
+
+    .login-btn:hover {
+      background: #1d4ed8;
+    }
+
+    .login-btn:active {
+      transform: translateY(1px);
+    }
+
+    .login-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* ---------- Spinner Overlay (blue background) ---------- */
+    .spinner-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(37, 99, 235, 0.92);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .spinner-overlay.active {
+      display: flex;
+    }
+
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 4px solid rgba(255, 255, 255, 0.25);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: spin 0.85s linear infinite;
+    }
+
+    .spinner-text {
+      color: #ffffff;
+      font-size: 15px;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    /* ---------- Footer ---------- */
+    .login-footer {
+      text-align: center;
+      font-size: 11.5px;
+      color: #94a3b8;
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px solid #e2e8f0;
+    }
+
+    /* ---------- Responsive ---------- */
+    @media (max-width: 480px) {
+      .login-card {
+        padding: 28px 20px 24px;
+      }
+      .login-title {
+        font-size: 19px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ========== SPINNER OVERLAY ========== -->
+  <div class="spinner-overlay" id="spinnerOverlay">
+    <div class="spinner"></div>
+    <div class="spinner-text">Authenticating</div>
+  </div>
+
+  <!-- ========== LOGIN FORM ========== -->
+  <div class="login-container">
+    <div class="login-card">
+
+      <div class="login-title">Admin Login</div>
+      <div class="login-subtitle">Enter your credentials to access the dashboard</div>
+
+      <!-- Error message -->
+      <div class="error-message" id="errorMessage">
+        Invalid email or password. Please try again.
+      </div>
+
+      <form id="loginForm" autocomplete="off" novalidate>
+
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input
+            type="email"
+            id="email"
+            class="input-field"
+            placeholder="Enter your email address"
+            required
+            autofocus
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input
+            type="password"
+            id="password"
+            class="input-field"
+            placeholder="Enter your password"
+            required
+          />
+        </div>
+
+        <button type="submit" class="login-btn" id="loginBtn">Sign In</button>
+
+        <div class="login-footer">
+          Janaki Professional Academy &middot; ERP System
+        </div>
+
+      </form>
+
+    </div>
+  </div>
+
+  <!-- ========== FIREBASE SDK ========== -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+
+  <script>
+    (function() {
+      'use strict';
+
+      // ----- Firebase Configuration (same as your firebase.js) -----
+      const firebaseConfig = {
+        apiKey: "AIzaSyBCdSPOM47RDoQpH2uIOlGpphS6RAiyWao",
+        authDomain: "skill2jobvisitcount.firebaseapp.com",
+        databaseURL: "https://skill2jobvisitcount-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "skill2jobvisitcount",
+        storageBucket: "skill2jobvisitcount.firebasestorage.app",
+        messagingSenderId: "765089407089",
+        appId: "1:765089407089:web:a410facdd7dfb6e1fbbbd0",
+        measurementId: "G-S5X1VJQS79"
+      };
+
+      // ----- Initialise Firebase -----
+      firebase.initializeApp(firebaseConfig);
+      const auth = firebase.auth();
+
+      // ----- Authorised User UID (only this user can log in) -----
+      const AUTHORISED_UID = '8Ay2GLTbOja4CKsDaIeZ2WeIObR2';
+
+      // ----- DOM refs -----
+      const form = document.getElementById('loginForm');
+      const emailInput = document.getElementById('email');
+      const passwordInput = document.getElementById('password');
+      const loginBtn = document.getElementById('loginBtn');
+      const errorEl = document.getElementById('errorMessage');
+      const spinner = document.getElementById('spinnerOverlay');
+
+      // ----- Helpers -----
+      function showError(message) {
+        errorEl.textContent = message || 'Invalid credentials. Please try again.';
+        errorEl.classList.add('visible');
+        emailInput.classList.add('error');
+        passwordInput.classList.add('error');
+      }
+
+      function hideError() {
+        errorEl.classList.remove('visible');
+        emailInput.classList.remove('error');
+        passwordInput.classList.remove('error');
+      }
+
+      function showSpinner(text) {
+        spinner.querySelector('.spinner-text').textContent = text || 'Authenticating';
+        spinner.classList.add('active');
+      }
+
+      function hideSpinner() {
+        spinner.classList.remove('active');
+      }
+
+      function setLoadingState(isLoading) {
+        loginBtn.disabled = isLoading;
+        loginBtn.textContent = isLoading ? 'Signing in ...' : 'Sign In';
+        if (isLoading) {
+          showSpinner('Authenticating');
+        } else {
+          hideSpinner();
+        }
+      }
+
+      // ----- Firebase Login -----
+      async function handleLogin(event) {
+        event.preventDefault();
+        hideError();
+
+        const email = emailInput.value.trim();
+        const password = passwordInput.value.trim();
+
+        if (!email) {
+          showError('Email is required.');
+          return;
+        }
+        if (!password) {
+          showError('Password is required.');
+          return;
+        }
+        if (!email.includes('@')) {
+          showError('Please enter a valid email address.');
+          return;
+        }
+
+        setLoadingState(true);
+
+        try {
+          // Sign in with Firebase
+          const userCredential = await auth.signInWithEmailAndPassword(email, password);
+          const user = userCredential.user;
+
+          // Verify UID matches the authorised user
+          if (user.uid !== AUTHORISED_UID) {
+            // Sign out the unauthorised user
+            await auth.signOut();
+            showError('You are not authorised to access this system.');
+            setLoadingState(false);
+            return;
+          }
+
+          // ----- SUCCESS -----
+          // Store session (optional, Firebase handles persistence)
+          sessionStorage.setItem('erp_session', 'authenticated');
+          sessionStorage.setItem('erp_user_id', user.uid);
+          sessionStorage.setItem('erp_login_time', Date.now().toString());
+
+          // Redirect to main app
+          window.location.href = 'index.html';
+
+        } catch (error) {
+          console.error('Login error:', error);
+          // Handle Firebase auth errors
+          let message = 'Authentication failed. Please try again.';
+          if (error.code === 'auth/user-not-found') {
+            message = 'No account found with this email.';
+          } else if (error.code === 'auth/wrong-password') {
+            message = 'Incorrect password. Please try again.';
+          } else if (error.code === 'auth/invalid-email') {
+            message = 'Invalid email address.';
+          } else if (error.code === 'auth/too-many-requests') {
+            message = 'Too many failed attempts. Please try again later.';
+          }
+          showError(message);
+          setLoadingState(false);
+        }
+      }
+
+      // ----- Clear error on input -----
+      emailInput.addEventListener('input', hideError);
+      passwordInput.addEventListener('input', hideError);
+
+      // ----- Form submit -----
+      form.addEventListener('submit', handleLogin);
+
+      // ----- Check if already logged in -----
+      async function checkExistingSession() {
+        const session = sessionStorage.getItem('erp_session');
+        if (session === 'authenticated') {
+          // Verify Firebase session is still valid
+          try {
+            const user = auth.currentUser;
+            if (user && user.uid === AUTHORISED_UID) {
+              // Still valid, redirect
+              window.location.href = 'index.html';
+              return;
+            } else {
+              // Invalid session, clear storage
+              sessionStorage.removeItem('erp_session');
+              sessionStorage.removeItem('erp_user_id');
+              sessionStorage.removeItem('erp_login_time');
+            }
+          } catch (e) {
+            // Ignore and let user log in again
+          }
+        }
+      }
+
+      // Run session check on load
+      checkExistingSession();
+
+      console.log('Admin login panel ready.');
+      console.log('Firebase Authentication enabled.');
+      console.log('Only authorised UID: ' + AUTHORISED_UID);
+
+    })();
+  </script>
+
+</body>
+</html>
