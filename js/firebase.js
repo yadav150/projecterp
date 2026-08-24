@@ -1,3 +1,57 @@
+// Firebase initialization using Realtime Database
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import {
+  getDatabase, ref as dbRef, push, set, update, remove, get, child,
+  onValue, query, orderByChild, runTransaction, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
+import {
+  getStorage, ref as sRef, uploadBytes, getDownloadURL, deleteObject
+} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-storage.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBCdSPOM47RDoQpH2uIOlGpphS6RAiyWao",
+  authDomain: "skill2jobvisitcount.firebaseapp.com",
+  databaseURL: "https://skill2jobvisitcount-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "skill2jobvisitcount",
+  storageBucket: "skill2jobvisitcount.firebasestorage.app",
+  messagingSenderId: "765089407089",
+  appId: "1:765089407089:web:a410facdd7dfb6e1fbbbd0",
+  measurementId: "G-S5X1VJQS79"
+};
+
+export const app = initializeApp(firebaseConfig);
+export const db = getDatabase(app);
+export const storage = getStorage(app);
+
+// EXPORT ALL REQUIRED FUNCTIONS – FIX FOR BLANK PAGE
+export {
+  dbRef,
+  push,
+  set,
+  update,
+  remove,
+  get,
+  child,
+  onValue,
+  query,
+  orderByChild,
+  runTransaction,
+  serverTimestamp,
+  sRef,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject
+};
+
+const NS = "erp_bfa";
+export const PATH = {
+  students: `${NS}/students`,
+  teachers: `${NS}/teachers`,
+  fees: `${NS}/fees`,
+  salaries: `${NS}/salaries`,
+  counters: `${NS}/counters`
+};
+
 // ---------- FIXED: nextCounter ----------
 export async function nextCounter(name, prefix, pad = 4) {
   const cRef = dbRef(db, `${PATH.counters}/${name}`);
@@ -27,7 +81,7 @@ export async function uploadPhoto(kind, id, file) {
   }
 }
 
-// (You can DELETE the fileToDataUrl function entirely now, it's not needed)
+// fileToDataUrl function – DELETED (not needed)
 
 // ---------- FIXED: deleteFile (Skip non-http URLs) ----------
 export async function deleteFile(url) {
