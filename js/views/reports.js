@@ -1,7 +1,6 @@
 // Reports View – Advanced Reports & Analytics
 import { el, ICON, fmtCurrency, fmtDate, todayISO, MONTHS, CLASSES, DEPARTMENTS } from "../utils.js";
-import { setCrumbs, toast, loadingState, DataTable } from "../ui.js";
-import { subscribeStudents, subscribeTeachers, subscribeFees, subscribeSalaries } from "../data.js";
+import { setCrumbs, toast, loadingState } from "../ui.js";
 import {
   getFeeReport,
   getAttendanceReport,
@@ -11,8 +10,6 @@ import {
   getClassWiseCount
 } from "../data-reports.js";
 import { exportToCSV, downloadCSV } from "../data-import-export.js";
-
-let unsubs = [];
 
 export function ReportsView() {
   setCrumbs([{ label: "Reports" }]);
@@ -65,9 +62,10 @@ export function ReportsView() {
   // Load initial tab
   loadTab("Fee Report");
 
+  // Cleanup on unmount – cancel any pending async operations
+  let canceled = false;
   page.addEventListener("view:unmount", () => {
-    unsubs.forEach(u => u && u());
-    unsubs = [];
+    canceled = true;
   });
 
   function loadTab(name) {
@@ -76,24 +74,29 @@ export function ReportsView() {
     container.innerHTML = "";
     container.appendChild(loadingState("Loading..."));
 
+    // Wrap async calls to check canceled flag
+    const safeRender = (renderFn) => {
+      renderFn(container, () => canceled);
+    };
+
     switch (name) {
       case "Fee Report":
-        renderFeeReport(container);
+        safeRender(renderFeeReport);
         break;
       case "Attendance Report":
-        renderAttendanceReport(container);
+        safeRender(renderAttendanceReport);
         break;
       case "Salary Report":
-        renderSalaryReport(container);
+        safeRender(renderSalaryReport);
         break;
       case "Student List":
-        renderStudentList(container);
+        safeRender(renderStudentList);
         break;
       case "Teacher List":
-        renderTeacherList(container);
+        safeRender(renderTeacherList);
         break;
       case "Class Summary":
-        renderClassSummary(container);
+        safeRender(renderClassSummary);
         break;
     }
   }
@@ -102,9 +105,19 @@ export function ReportsView() {
 }
 
 // ---------- Fee Report ----------
-function renderFeeReport(container) {
-  const fromDate = el("input", { type: "date", class: "input", value: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10), style: "max-width:170px;" });
-  const toDate = el("input", { type: "date", class: "input", value: todayISO(), style: "max-width:170px;" });
+function renderFeeReport(container, isCanceled) {
+  const fromDate = el("input", {
+    type: "date",
+    class: "input",
+    value: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().slice(0, 10),
+    style: "max-width:170px;"
+  });
+  const toDate = el("input", {
+    type: "date",
+    class: "input",
+    value: todayISO(),
+    style: "max-width:170px;"
+  });
   const filterBar = el("div", { class: "filter-bar" }, [
     el("span", { style: "font-weight:500;", text: "From:" }),
     fromDate,
@@ -119,10 +132,12 @@ function renderFeeReport(container) {
   container.appendChild(resultContainer);
 
   function generate() {
+    if (isCanceled()) return;
     resultContainer.innerHTML = "";
     resultContainer.appendChild(loadingState("Generating report..."));
 
     getFeeReport(fromDate.value, toDate.value).then(data => {
+      if (isCanceled()) return;
       resultContainer.innerHTML = "";
 
       // Summary stats
@@ -182,6 +197,7 @@ function renderFeeReport(container) {
       };
       resultContainer.appendChild(exportBtn);
     }).catch(err => {
+      if (isCanceled()) return;
       resultContainer.innerHTML = "";
       resultContainer.appendChild(el("div", { class: "state", text: "Error loading report: " + err.message }));
     });
@@ -191,7 +207,7 @@ function renderFeeReport(container) {
 }
 
 // ---------- Attendance Report ----------
-function renderAttendanceReport(container) {
+function renderAttendanceReport(container, isCanceled) {
   const monthSel = el("select", { class: "select" }, [
     ...MONTHS.map(m => el("option", { value: m, text: m }))
   ]);
@@ -217,6 +233,7 @@ function renderAttendanceReport(container) {
   container.appendChild(resultContainer);
 
   function generate() {
+    if (isCanceled()) return;
     resultContainer.innerHTML = "";
     resultContainer.appendChild(loadingState("Generating report..."));
 
@@ -227,6 +244,7 @@ function renderAttendanceReport(container) {
     const type = typeSel.value;
 
     getAttendanceReport(monthStr, type).then(data => {
+      if (isCanceled()) return;
       resultContainer.innerHTML = "";
 
       const stats = el("div", { class: "summary-grid" }, [
@@ -270,6 +288,7 @@ function renderAttendanceReport(container) {
       };
       resultContainer.appendChild(exportBtn);
     }).catch(err => {
+      if (isCanceled()) return;
       resultContainer.innerHTML = "";
       resultContainer.appendChild(el("div", { class: "state", text: "Error loading report: " + err.message }));
     });
@@ -279,7 +298,7 @@ function renderAttendanceReport(container) {
 }
 
 // ---------- Salary Report ----------
-function renderSalaryReport(container) {
+function renderSalaryReport(container, isCanceled) {
   const monthSel = el("select", { class: "select" }, [
     ...MONTHS.map(m => el("option", { value: m, text: m }))
   ]);
@@ -299,6 +318,7 @@ function renderSalaryReport(container) {
   container.appendChild(resultContainer);
 
   function generate() {
+    if (isCanceled()) return;
     resultContainer.innerHTML = "";
     resultContainer.appendChild(loadingState("Generating report..."));
 
@@ -306,6 +326,7 @@ function renderSalaryReport(container) {
     const year = Number(yearSel.value);
 
     getSalaryReport(month, year).then(data => {
+      if (isCanceled()) return;
       resultContainer.innerHTML = "";
 
       const stats = el("div", { class: "summary-grid" }, [
@@ -345,6 +366,7 @@ function renderSalaryReport(container) {
       };
       resultContainer.appendChild(exportBtn);
     }).catch(err => {
+      if (isCanceled()) return;
       resultContainer.innerHTML = "";
       resultContainer.appendChild(el("div", { class: "state", text: "Error loading report: " + err.message }));
     });
@@ -354,7 +376,7 @@ function renderSalaryReport(container) {
 }
 
 // ---------- Student List ----------
-function renderStudentList(container) {
+function renderStudentList(container, isCanceled) {
   container.innerHTML = "";
   container.appendChild(loadingState("Loading students..."));
 
@@ -387,6 +409,7 @@ function renderStudentList(container) {
   container.appendChild(listContainer);
 
   function renderList() {
+    if (isCanceled()) return;
     listContainer.innerHTML = "";
     listContainer.appendChild(loadingState("Loading..."));
 
@@ -397,6 +420,7 @@ function renderStudentList(container) {
     };
 
     getStudentList(filters).then(students => {
+      if (isCanceled()) return;
       listContainer.innerHTML = "";
       if (!students.length) {
         listContainer.appendChild(el("div", { class: "state", sub: "No students found." }));
@@ -445,6 +469,7 @@ function renderStudentList(container) {
       };
       listContainer.appendChild(exportBtn);
     }).catch(err => {
+      if (isCanceled()) return;
       listContainer.innerHTML = "";
       listContainer.appendChild(el("div", { class: "state", text: "Error: " + err.message }));
     });
@@ -454,7 +479,7 @@ function renderStudentList(container) {
 }
 
 // ---------- Teacher List ----------
-function renderTeacherList(container) {
+function renderTeacherList(container, isCanceled) {
   container.innerHTML = "";
   container.appendChild(loadingState("Loading teachers..."));
 
@@ -478,6 +503,7 @@ function renderTeacherList(container) {
   container.appendChild(listContainer);
 
   function renderList() {
+    if (isCanceled()) return;
     listContainer.innerHTML = "";
     listContainer.appendChild(loadingState("Loading..."));
 
@@ -487,6 +513,7 @@ function renderTeacherList(container) {
     };
 
     getTeacherList(filters).then(teachers => {
+      if (isCanceled()) return;
       listContainer.innerHTML = "";
       if (!teachers.length) {
         listContainer.appendChild(el("div", { class: "state", sub: "No teachers found." }));
@@ -535,6 +562,7 @@ function renderTeacherList(container) {
       };
       listContainer.appendChild(exportBtn);
     }).catch(err => {
+      if (isCanceled()) return;
       listContainer.innerHTML = "";
       listContainer.appendChild(el("div", { class: "state", text: "Error: " + err.message }));
     });
@@ -544,11 +572,12 @@ function renderTeacherList(container) {
 }
 
 // ---------- Class Summary ----------
-function renderClassSummary(container) {
+function renderClassSummary(container, isCanceled) {
   container.innerHTML = "";
   container.appendChild(loadingState("Loading..."));
 
   getClassWiseCount().then(counts => {
+    if (isCanceled()) return;
     container.innerHTML = "";
     const stats = el("div", { class: "summary-grid" });
     let total = 0;
@@ -585,6 +614,7 @@ function renderClassSummary(container) {
     };
     container.appendChild(exportBtn);
   }).catch(err => {
+    if (isCanceled()) return;
     container.innerHTML = "";
     container.appendChild(el("div", { class: "state", text: "Error: " + err.message }));
   });
