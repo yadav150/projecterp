@@ -69,12 +69,14 @@ export function emptyState({ title = "No data yet", sub = "Nothing to show here.
     el("div", { class: "state-sub", text: sub })
   ]);
 }
+
 export function loadingState(msg = "Loading data…") {
   return el("div", { class: "state" }, [
     el("div", { class: "spinner" }),
     el("div", { class: "state-sub", text: msg })
   ]);
 }
+
 export function errorState(msg = "Something went wrong") {
   return el("div", { class: "state" }, [
     el("div", { html: ICON.warn }),
