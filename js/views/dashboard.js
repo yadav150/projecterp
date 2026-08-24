@@ -37,32 +37,75 @@ export function DashboardView() {
   const content = el("div", { id: "dashboard-content" });
   page.appendChild(content);
 
+  // ----- Build static structure (only once) -----
+  // 1. Summary grid
+  const summaryGrid = el("div", { class: "summary-grid", "data-testid": "dashboard-summary" });
+  content.appendChild(summaryGrid);
+
+  // 2. Two-col for recent admissions & fees
+  const recentWrap = el("div", { class: "two-col" });
+  const recentAdmissions = createCard("Recent Admissions", "Latest students added");
+  const recentFees = createCard("Recent Fee Payments", "Last collections");
+  recentWrap.appendChild(recentAdmissions.wrap);
+  recentWrap.appendChild(recentFees.wrap);
+  content.appendChild(recentWrap);
+
+  // 3. Recent salaries card (full width)
+  const recentSalaries = createCard("Recent Salary Payments", "Last payouts");
+  content.appendChild(recentSalaries.wrap);
+
+  // 4. Activity feed
+  const activityCard = createCard("Recent Activities", "Latest system actions");
+  content.appendChild(activityCard.wrap);
+
+  // 5. Upcoming events
+  const eventsCard = createCard("Upcoming Events", "School events, exams, holidays");
+  content.appendChild(eventsCard.wrap);
+
+  // 6. Pending tasks
+  const tasksCard = createCard("Pending Tasks", "Actions requiring attention");
+  content.appendChild(tasksCard.wrap);
+
+  // Store references to bodies for updates
+  const bodies = {
+    summary: summaryGrid,
+    admissions: recentAdmissions.body,
+    fees: recentFees.body,
+    salaries: recentSalaries.body,
+    activity: activityCard.body,
+    events: eventsCard.body,
+    tasks: tasksCard.body
+  };
+
   // Data state
   let students = [], teachers = [], fees = [], salaries = [];
 
-  const unsubs = [
-    subscribeStudents((v) => { students = v || []; render(); }),
-    subscribeTeachers((v) => { teachers = v || []; render(); }),
-    subscribeFees((v) => { fees = v || []; render(); }),
-    subscribeSalaries((v) => { salaries = v || []; render(); })
-  ];
+  // Subscription cleanups
+  const unsubs = [];
 
+  // Subscribe to data
+  unsubs.push(subscribeStudents((v) => { students = v || []; updateDashboard(); }));
+  unsubs.push(subscribeTeachers((v) => { teachers = v || []; updateDashboard(); }));
+  unsubs.push(subscribeFees((v) => { fees = v || []; updateDashboard(); }));
+  unsubs.push(subscribeSalaries((v) => { salaries = v || []; updateDashboard(); }));
+
+  // Cleanup on unmount
   page.addEventListener("view:unmount", () => unsubs.forEach(u => u && u()));
 
-  // Listen to role changes from the switcher
+  // Listen to role changes
   page.addEventListener("roleChange", (e) => {
     const newRole = e.detail.role;
     if (newRole !== currentRole) {
       currentRole = newRole;
-      render();
+      updateDashboard();
     }
   });
 
-  function render() {
-    content.innerHTML = "";
+  // ---------- Update function (no DOM rebuild) ----------
+  function updateDashboard() {
     const role = currentRole;
 
-    // ---- Build stats per role ----
+    // ---- Compute stats based on role ----
     let stats = [];
     if (role === "admin") {
       const today = new Date();
@@ -109,60 +152,58 @@ export function DashboardView() {
       ];
     }
 
-    // ---- Render summary grid ----
-    const summary = el("div", { class: "summary-grid", "data-testid": "dashboard-summary" });
-    stats.forEach(s => summary.appendChild(stat(s)));
-    content.appendChild(summary);
+    // Update summary grid (replace children)
+    summaryGrid.innerHTML = "";
+    stats.forEach(s => summaryGrid.appendChild(stat(s)));
 
-    // ---- Role‑specific recent cards (Admin only) ----
+    // Update recent cards (only for admin, others can show empty)
     if (role === "admin") {
-      const recentWrap = el("div", { class: "two-col" });
-      const recentAdmissions = card("Recent Admissions", "Latest students added");
-      const recentFees = card("Recent Fee Payments", "Last collections");
-      const recentSalaries = card("Recent Salary Payments", "Last payouts");
-      recentWrap.appendChild(recentAdmissions.wrap);
-      recentWrap.appendChild(recentFees.wrap);
-      content.appendChild(recentWrap);
-      content.appendChild(recentSalaries.wrap);
-
-      fillRecent(recentAdmissions.body, students.slice(0, 6), r => ({
-        title: r.name, sub: `${r.class || "—"} · ${r.section || "—"} · Adm #${r.admissionNumber || "—"}`,
-        side: fmtDate(r.admissionDate || r.createdAt), avatar: r
+      fillRecent(bodies.admissions, students.slice(0, 6), r => ({
+        title: r.name,
+        sub: `${r.class || "—"} · ${r.section || "—"} · Adm #${r.admissionNumber || "—"}`,
+        side: fmtDate(r.admissionDate || r.createdAt),
+        avatar: r
       }));
-      fillRecent(recentFees.body, fees.slice(0, 6), r => ({
-        title: r.studentName || "—", sub: `${r.feeType || "Fee"} · Receipt #${r.receiptNumber}`,
-        side: fmtCurrency(r.amount), avatar: { name: r.studentName }
+      fillRecent(bodies.fees, fees.slice(0, 6), r => ({
+        title: r.studentName || "—",
+        sub: `${r.feeType || "Fee"} · Receipt #${r.receiptNumber}`,
+        side: fmtCurrency(r.amount),
+        avatar: { name: r.studentName }
       }));
-      fillRecent(recentSalaries.body, salaries.slice(0, 6), r => ({
-        title: r.teacherName || "—", sub: `${r.month || ""} · Receipt #${r.receiptNumber}`,
-        side: fmtCurrency(r.amount), avatar: { name: r.teacherName }
+      fillRecent(bodies.salaries, salaries.slice(0, 6), r => ({
+        title: r.teacherName || "—",
+        sub: `${r.month || ""} · Receipt #${r.receiptNumber}`,
+        side: fmtCurrency(r.amount),
+        avatar: { name: r.teacherName }
       }));
+    } else {
+      // Hide or clear recent cards for other roles
+      bodies.admissions.innerHTML = el("div", { class: "state", text: "Not available for this role" }).outerHTML;
+      bodies.fees.innerHTML = el("div", { class: "state", text: "Not available for this role" }).outerHTML;
+      bodies.salaries.innerHTML = el("div", { class: "state", text: "Not available for this role" }).outerHTML;
     }
 
-    // ---- New widgets for all roles ----
-    // 1. Recent Activities (combined feed)
-    const activityCard = card("Recent Activities", "Latest system actions");
-    content.appendChild(activityCard.wrap);
-    fillActivityFeed(activityCard.body, students, fees, salaries);
+    // Activity feed (all roles)
+    fillActivityFeed(bodies.activity, students, fees, salaries);
 
-    // 2. Upcoming Events (placeholder – reads from events collection if it exists, otherwise empty)
-    const eventsCard = card("Upcoming Events", "School events, exams, holidays");
-    content.appendChild(eventsCard.wrap);
-    fillUpcomingEvents(eventsCard.body);
+    // Events (placeholder)
+    fillUpcomingEvents(bodies.events);
 
-    // 3. Pending Tasks
-    const tasksCard = card("Pending Tasks", "Actions requiring attention");
-    content.appendChild(tasksCard.wrap);
-    fillPendingTasks(tasksCard.body, fees, salaries);
+    // Pending tasks (all roles)
+    fillPendingTasks(bodies.tasks, fees, salaries);
   }
 
-  // Initial render
-  render();
+  // Initial update
+  updateDashboard();
 
   return page;
 }
 
-// ---------- Helper: inject role switcher into topbar ----------
+// ============================================================
+// Helper functions (unchanged, but moved outside)
+// ============================================================
+
+// ---------- Role switcher injection ----------
 function injectRoleSwitcher() {
   const topbarRight = document.querySelector(".topbar-right");
   if (!topbarRight) return;
@@ -186,8 +227,8 @@ function injectRoleSwitcher() {
   topbarRight.prepend(wrapper);
 }
 
-// ---------- Helper: card ----------
-function card(title, subtitle) {
+// ---------- Card creator ----------
+function createCard(title, subtitle) {
   const body = el("div", { class: "card-body" });
   const wrap = el("div", { class: "card" }, [
     el("div", { class: "card-header" }, [
@@ -201,7 +242,7 @@ function card(title, subtitle) {
   return { wrap, body };
 }
 
-// ---------- Helper: stat ----------
+// ---------- Stat ----------
 function stat({ label, value, icon, tone = "", foot = "" }) {
   return el("div", { class: "stat" }, [
     el("div", { class: "stat-top" }, [
@@ -213,7 +254,7 @@ function stat({ label, value, icon, tone = "", foot = "" }) {
   ]);
 }
 
-// ---------- Helper: fill recent lists ----------
+// ---------- Fill recent lists ----------
 function fillRecent(container, rows, mapper) {
   container.innerHTML = "";
   if (!rows.length) {
@@ -246,7 +287,7 @@ function avatarNode(o = {}) {
   return av;
 }
 
-// ---------- New: Activity Feed ----------
+// ---------- Activity Feed ----------
 function fillActivityFeed(container, students, fees, salaries) {
   const activities = [];
 
@@ -300,7 +341,7 @@ function fillActivityFeed(container, students, fees, salaries) {
   container.appendChild(list);
 }
 
-// ---------- New: Upcoming Events (placeholder) ----------
+// ---------- Upcoming Events (placeholder) ----------
 function fillUpcomingEvents(container) {
   container.innerHTML = "";
   container.appendChild(el("div", { class: "state" }, [
@@ -309,7 +350,7 @@ function fillUpcomingEvents(container) {
   ]));
 }
 
-// ---------- New: Pending Tasks ----------
+// ---------- Pending Tasks ----------
 function fillPendingTasks(container, fees, salaries) {
   const pendingFees = fees.filter(f => (f.balance || 0) > 0);
   const pendingSalaries = salaries.filter(s => s.status === "Pending");
