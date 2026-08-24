@@ -1,7 +1,8 @@
 // Data layer using Realtime Database
 import {
   db, PATH, dbRef, push, set, update, remove, get, onValue,
-  nextCounter, uploadPhoto, sRef, uploadBytes, getDownloadURL, deleteFile
+  nextCounter, uploadPhoto, sRef, uploadBytes, getDownloadURL, deleteFile,
+  storage // ✅ Added missing import
 } from "./firebase.js";
 
 function nowMs() { return Date.now(); }
@@ -14,7 +15,7 @@ function subscribeCollection(path, cb) {
     list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     cb(list);
   }, (err) => cb([], err));
-  return off;
+  return off; // ✅ Returns unsubscribe function – CORRECT
 }
 
 async function getById(path, id) {
@@ -50,12 +51,14 @@ export async function createStudent(payload, photoFile) {
   }
   return { id, ...data, photoUrl };
 }
+
 export async function updateStudent(id, payload, photoFile) {
   let photoUrl = payload.photoUrl;
   if (photoFile) photoUrl = await uploadPhoto("students", id, photoFile);
   await update(dbRef(db, `${PATH.students}/${id}`), { ...payload, photoUrl: photoUrl ?? null, updatedAt: nowMs() });
   return { id, ...payload, photoUrl };
 }
+
 export async function deleteStudent(id) { await remove(dbRef(db, `${PATH.students}/${id}`)); }
 export async function getStudent(id) { return getById(PATH.students, id); }
 export function subscribeStudents(cb) { return subscribeCollection(PATH.students, cb); }
@@ -79,12 +82,14 @@ export async function createTeacher(payload, photoFile) {
   }
   return { id, ...data, photoUrl };
 }
+
 export async function updateTeacher(id, payload, photoFile) {
   let photoUrl = payload.photoUrl;
   if (photoFile) photoUrl = await uploadPhoto("teachers", id, photoFile);
   await update(dbRef(db, `${PATH.teachers}/${id}`), { ...payload, photoUrl: photoUrl ?? null, updatedAt: nowMs() });
   return { id, ...payload, photoUrl };
 }
+
 export async function deleteTeacher(id) { await remove(dbRef(db, `${PATH.teachers}/${id}`)); }
 export async function getTeacher(id) { return getById(PATH.teachers, id); }
 export function subscribeTeachers(cb) { return subscribeCollection(PATH.teachers, cb); }
@@ -96,6 +101,7 @@ export async function recordFeePayment(payload) {
   const id = await pushRecord(PATH.fees, data);
   return { id, ...data };
 }
+
 export async function deleteFee(id) { await remove(dbRef(db, `${PATH.fees}/${id}`)); }
 export async function getFee(id) { return getById(PATH.fees, id); }
 export function subscribeFees(cb) { return subscribeCollection(PATH.fees, cb); }
@@ -107,6 +113,7 @@ export async function recordSalaryPayment(payload) {
   const id = await pushRecord(PATH.salaries, data);
   return { id, ...data };
 }
+
 export async function deleteSalary(id) { await remove(dbRef(db, `${PATH.salaries}/${id}`)); }
 export async function getSalary(id) { return getById(PATH.salaries, id); }
 export function subscribeSalaries(cb) { return subscribeCollection(PATH.salaries, cb); }
@@ -116,7 +123,7 @@ export async function addStudentDocument(studentId, file) {
   if (!file) return null;
   const docId = `doc_${Date.now()}`;
   const path = `students/${studentId}/documents/${docId}_${file.name.replace(/\s+/g, "_")}`;
-  const r = sRef(storage, path);
+  const r = sRef(storage, path); // ✅ storage is now imported
   await uploadBytes(r, file);
   const url = await getDownloadURL(r);
   const docData = {
