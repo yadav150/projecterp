@@ -221,38 +221,16 @@
       if (el) el.innerHTML = html;
     });
   }
-
-  // ---- STUDENTS (unchanged) ----
-  function renderStudents() {
-    pageContainer.innerHTML = '' +
-      '<div class="page-header"><div><h1 class="page-title">Students</h1><p class="page-subtitle">Manage all enrolled students</p></div><div class="page-actions"><button class="btn btn-primary" onclick="window.showToast(\'Student registration coming soon.\', \'info\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Student</button></div></div>' +
-      '<div class="table-wrap"><div class="table-scroll"><table class="data-table"><thead><tr><th>Name</th><th>Class</th><th>Roll</th><th>Status</th><th>Actions</th></tr></thead><tbody id="students-body"><tr><td colspan="5"><div class="state"><div class="spinner"></div></div></td></tr></tbody></table></div></div>';
-
-    var db = window.db;
-    if (!db) return;
-
-    db.ref('admissions').once('value').then(function(snapshot) {
-      var tbody = document.getElementById('students-body');
-      if (!snapshot.exists()) {
-        tbody.innerHTML = '<tr><td colspan="5"><div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><div class="state-title">No students found</div></div></td></tr>';
-        return;
-      }
-      var html = '';
-      var items = [];
-      snapshot.forEach(function(child) {
-        var data = child.val();
-        data.id = child.key;
-        items.push(data);
-      });
-      items.sort(function(a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
-      items.forEach(function(data) {
-        var initials = data.name ? data.name.split(' ').map(function(n){return n.charAt(0)}).join('').toUpperCase() : '?';
-        html += '<tr><td><div class="cell-user"><span class="avatar">' + initials + '</span><div><div class="u-name">' + (data.name || 'N/A') + '</div></div></div></td><td>' + (data.class || 'N/A') + '</td><td>' + (data.roll || 'N/A') + '</td><td><span class="badge ' + (data.status === 'Enrolled' ? 'green' : 'amber') + '">' + (data.status || 'N/A') + '</span></td><td><div class="row-actions"><button class="icon-btn-sm" onclick="window.showToast(\'View details coming soon.\', \'info\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></td></tr>';
-      });
-      tbody.innerHTML = html;
-    });
-  }
-
+function renderStudents() {
+  pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Students Module...</div></div>';
+  import('./students.js').then(function(module) {
+    if (module && typeof module.render === 'function') {
+      module.render(pageContainer);
+    }
+  }).catch(function() {
+    pageContainer.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Module not loaded</div></div>';
+  });
+}
   // ---- ADMISSION (lazy load) ----
   function renderAdmission() {
     if (typeof window.renderAdmissionModule === 'function') {
