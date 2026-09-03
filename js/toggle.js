@@ -1,16 +1,14 @@
-// Sidebar toggle for mobile navigation
+// js/toggle.js
 document.addEventListener("DOMContentLoaded", function() {
   var menuBtn = document.getElementById("menu-btn");
   var sidebar = document.getElementById("sidebar");
 
   if (menuBtn && sidebar) {
-    // Toggle sidebar on menu button click
     menuBtn.addEventListener("click", function(e) {
       e.stopPropagation();
       sidebar.classList.toggle("open");
     });
 
-    // Close sidebar when a nav item is clicked
     var navItems = sidebar.querySelectorAll(".nav-item");
     navItems.forEach(function(item) {
       item.addEventListener("click", function() {
@@ -18,7 +16,6 @@ document.addEventListener("DOMContentLoaded", function() {
       });
     });
 
-    // Close sidebar when clicking outside
     document.addEventListener("click", function(e) {
       if (
         sidebar.classList.contains("open") &&
@@ -30,7 +27,6 @@ document.addEventListener("DOMContentLoaded", function() {
       }
     });
 
-    // Close sidebar on escape key
     document.addEventListener("keydown", function(e) {
       if (e.key === "Escape" && sidebar.classList.contains("open")) {
         sidebar.classList.remove("open");
