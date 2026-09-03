@@ -10,14 +10,12 @@
 
   var ADMISSIONS_COLLECTION = 'admissions';
 
-  // Helper to generate a unique token (short UUID)
   function generateToken() {
     return Math.random().toString(36).substring(2, 8) + '-' +
            Math.random().toString(36).substring(2, 8) + '-' +
            Date.now().toString(36);
   }
 
-  // Render the admission page
   function render(container) {
     if (!container) return;
 
@@ -34,7 +32,6 @@
 
     container.innerHTML = html;
 
-    // Expose module functions
     window.admissionModule = {
       render: render,
       openAddModal: openAddModal,
@@ -157,7 +154,7 @@
         .then(function() {
           window.closeModal();
           window.showToast('Admission added successfully for ' + name + '.', 'success');
-          loadAdmissions(); // refresh
+          loadAdmissions();
         })
         .catch(function(error) {
           window.showToast('Error saving admission: ' + error.message, 'error');
@@ -230,7 +227,6 @@
     }
   }
 
-  // ---- PDF Download with QR ----
   function downloadPDF(id) {
     var item = allAdmissions.find(function(a) { return a.id === id; });
     if (!item) {
@@ -238,7 +234,6 @@
       return;
     }
 
-    // Create a temporary receipt container
     var receiptDiv = document.createElement('div');
     receiptDiv.className = 'receipt';
     receiptDiv.style.cssText = 'padding:40px;max-width:780px;margin:0 auto;background:#fff;font-family:Inter,sans-serif;';
@@ -271,7 +266,6 @@
 
     document.body.appendChild(receiptDiv);
 
-    // Generate QR code
     var qrContainer = document.getElementById('qr-code-container');
     var verifyUrl = window.location.origin + '/verify.html?token=' + item.token;
     if (typeof QRCode !== 'undefined') {
@@ -287,7 +281,6 @@
       qrContainer.textContent = 'QR Code not available';
     }
 
-    // Use html2canvas to capture receipt
     html2canvas(receiptDiv, {
       scale: 2,
       useCORS: true,
@@ -307,8 +300,7 @@
     });
   }
 
-  // Export
-  var admissionModule = {
+  window.admissionModule = {
     render: render,
     openAddModal: openAddModal,
     openEditModal: openEditModal,
@@ -317,6 +309,5 @@
     downloadPDF: downloadPDF
   };
 
-  window.admissionModule = admissionModule;
   export { render };
 })();
