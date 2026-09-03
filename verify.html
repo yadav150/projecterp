@@ -101,7 +101,6 @@
     </div>
   </div>
 
-  <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
   <script src="js/firebase-config.js"></script>
@@ -141,12 +140,10 @@
         return;
       }
 
-      // Show loading
       renderState('loading', 'Verifying Admission', 'Please wait...');
 
       var db = firebase.firestore();
 
-      // Query admission by token
       db.collection('admissions')
         .where('token', '==', token)
         .get()
