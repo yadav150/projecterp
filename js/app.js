@@ -149,7 +149,7 @@
     }
   }
 
-  // ---- Dashboard ----
+  // ---- DASHBOARD (Corrected HTML) ----
   function renderDashboard() {
     var db = window.db;
     if (!db) {
@@ -157,18 +157,23 @@
       return;
     }
 
-    pageContainer.innerHTML = '' +
-      '<div class="page-header">' +
-        '<div><h1 class="page-title">Dashboard</h1><p class="page-subtitle">Overview of Janaki Professional Academy</p></div>' +
-        '<div class="page-actions"><button class="btn btn-outline" onclick="window.showToast(\'Refreshing...\', \'info\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Refresh</button></div>' +
-      '</div>' +
-      '<div class="summary-grid" id="summary-grid">' +
-        '<div class="stat"><div class="stat-top"><span class="stat-label">Total Students</span><span class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span></div><div class="stat-value" id="stat-students">--</div><div class="stat-foot">Loading...</div></div>' +
-        '<div class="stat"><div class="stat-top"><span class="stat-label">Total Admissions</span><span class="stat-icon sky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></span></div><div class="stat-value" id="stat-admissions">--</div><div class="stat-foot">Total records</div></div>' +
-        '<div class="stat"><div class="stat-top"><span class="stat-label">Enrolled</span><span class="stat-icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span></div><div class="stat-value" id="stat-enrolled">--</div><div class="stat-foot">Active students</div></div>' +
-        '<div class="stat"><div class="stat-top"><span class="stat-label">Pending</span><span class="stat-icon red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span></div><div class="stat-value" id="stat-pending">--</div><div class="stat-foot">Awaiting confirmation</div></div>' +
-      '</div>' +
-      '<div class="card"><div class="card-header"><div><div class="card-title">Recent Admissions</div><div class="card-subtitle">Latest enrolled students</div></div></div><div class="card-body"><div id="recent-admissions">Loading...</div></div></div>';
+    // Clean, verified HTML template with all IDs present
+    pageContainer.innerHTML = `
+      <div class="page-header">
+        <div><h1 class="page-title">Dashboard</h1><p class="page-subtitle">Overview of Janaki Professional Academy</p></div>
+        <div class="page-actions"><button class="btn btn-outline" onclick="window.showToast('Refreshing...', 'info')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg> Refresh</button></div>
+      </div>
+      <div class="summary-grid" id="summary-grid">
+        <div class="stat"><div class="stat-top"><span class="stat-label">Total Students</span><span class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span></div><div class="stat-value" id="stat-students">--</div><div class="stat-foot">Loading...</div></div>
+        <div class="stat"><div class="stat-top"><span class="stat-label">Total Admissions</span><span class="stat-icon sky"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></span></div><div class="stat-value" id="stat-admissions">--</div><div class="stat-foot">Total records</div></div>
+        <div class="stat"><div class="stat-top"><span class="stat-label">Enrolled</span><span class="stat-icon amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span></div><div class="stat-value" id="stat-enrolled">--</div><div class="stat-foot">Active students</div></div>
+        <div class="stat"><div class="stat-top"><span class="stat-label">Pending</span><span class="stat-icon red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span></div><div class="stat-value" id="stat-pending">--</div><div class="stat-foot">Awaiting confirmation</div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><div><div class="card-title">Recent Admissions</div><div class="card-subtitle">Latest enrolled students</div></div></div>
+        <div class="card-body"><div id="recent-admissions">Loading...</div></div>
+      </div>
+    `;
 
     // Load stats
     db.ref('admissions').once('value').then(function(snapshot) {
@@ -179,12 +184,17 @@
         if (data.status === 'Enrolled') enrolled++;
         else if (data.status === 'Pending') pending++;
       });
-      document.getElementById('stat-admissions').textContent = total;
-      document.getElementById('stat-enrolled').textContent = enrolled;
-      document.getElementById('stat-pending').textContent = pending;
-      document.getElementById('stat-students').textContent = total;
+      var elAdmissions = document.getElementById('stat-admissions');
+      var elEnrolled = document.getElementById('stat-enrolled');
+      var elPending = document.getElementById('stat-pending');
+      var elStudents = document.getElementById('stat-students');
+      if (elAdmissions) elAdmissions.textContent = total;
+      if (elEnrolled) elEnrolled.textContent = enrolled;
+      if (elPending) elPending.textContent = pending;
+      if (elStudents) elStudents.textContent = total;
     }).catch(function() {
-      document.getElementById('stat-admissions').textContent = 'Error';
+      var el = document.getElementById('stat-admissions');
+      if (el) el.textContent = 'Error';
     });
 
     // Recent 5
@@ -207,11 +217,12 @@
         });
         html += '</ul>';
       }
-      document.getElementById('recent-admissions').innerHTML = html;
+      var el = document.getElementById('recent-admissions');
+      if (el) el.innerHTML = html;
     });
   }
 
-  // ---- Students ----
+  // ---- STUDENTS (unchanged) ----
   function renderStudents() {
     pageContainer.innerHTML = '' +
       '<div class="page-header"><div><h1 class="page-title">Students</h1><p class="page-subtitle">Manage all enrolled students</p></div><div class="page-actions"><button class="btn btn-primary" onclick="window.showToast(\'Student registration coming soon.\', \'info\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Student</button></div></div>' +
@@ -242,7 +253,7 @@
     });
   }
 
-  // ---- Admission (lazy load) ----
+  // ---- ADMISSION (lazy load) ----
   function renderAdmission() {
     if (typeof window.renderAdmissionModule === 'function') {
       window.renderAdmissionModule(pageContainer);
@@ -259,7 +270,7 @@
     }
   }
 
-  // ---- Teachers (lazy load) ----
+  // ---- TEACHERS (lazy load) ----
   function renderTeachers() {
     pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Teachers Module...</div></div>';
     import('./teachers.js').then(function(module) {
@@ -271,7 +282,7 @@
     });
   }
 
-  // ---- Fees (lazy load) ----
+  // ---- FEES (lazy load) ----
   function renderFees() {
     pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Fee Module...</div></div>';
     import('./fees.js').then(function(module) {
@@ -283,7 +294,7 @@
     });
   }
 
-  // ---- Salary (lazy load) ----
+  // ---- SALARY (lazy load) ----
   function renderSalary() {
     pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Salary Module...</div></div>';
     import('./salary.js').then(function(module) {
@@ -295,7 +306,7 @@
     });
   }
 
-  // ---- Receipts (lazy load) ----
+  // ---- RECEIPTS (lazy load) ----
   function renderReceipts() {
     pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Receipts Module...</div></div>';
     import('./receipts.js').then(function(module) {
@@ -307,7 +318,7 @@
     });
   }
 
-  // ---- Attendance (lazy load) ----
+  // ---- ATTENDANCE (lazy load) ----
   function renderAttendance() {
     pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Attendance Module...</div></div>';
     import('./attendance.js').then(function(module) {
@@ -319,7 +330,7 @@
     });
   }
 
-  // ---- Administration (lazy load) ----
+  // ---- ADMINISTRATION (lazy load) ----
   function renderAdministration() {
     pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Administration Module...</div></div>';
     import('./administration.js').then(function(module) {
@@ -348,7 +359,6 @@
     navigate(hash);
   });
 
-  // ---- Bootstrap ----
   document.addEventListener('DOMContentLoaded', function() {
     var initialRoute = window.location.hash.replace('#/', '') || 'dashboard';
     navigate(initialRoute);
