@@ -4,11 +4,11 @@
 
   var db = window.db;
   if (!db) {
-    console.error('Firestore not available');
+    console.error('Realtime Database not available');
     return;
   }
 
-  var ADMISSIONS_COLLECTION = 'admissions';
+  var ADMISSIONS_PATH = 'admissions';
 
   function generateToken() {
     return Math.random().toString(36).substring(2, 8) + '-' +
@@ -47,25 +47,21 @@
   var allAdmissions = [];
 
   function loadAdmissions() {
-    db.collection(ADMISSIONS_COLLECTION)
-      .orderBy('createdAt', 'desc')
-      .get()
-      .then(function(snapshot) {
-        allAdmissions = [];
-        snapshot.forEach(function(doc) {
-          var data = doc.data();
-          data.id = doc.id;
-          allAdmissions.push(data);
-        });
-        renderTableRows(allAdmissions);
-      })
-      .catch(function(error) {
-        console.error('Error loading admissions:', error);
-        var tbody = document.getElementById('admission-body');
-        if (tbody) {
-          tbody.innerHTML = '<tr><td colspan="6"><div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Error loading data</div><div class="state-sub">' + error.message + '</div></div></td></tr>';
-        }
+    db.ref(ADMISSIONS_PATH).once('value').then(function(snapshot) {
+      allAdmissions = [];
+      snapshot.forEach(function(child) {
+        var data = child.val();
+        data.id = child.key;
+        allAdmissions.push(data);
       });
+      renderTableRows(allAdmissions);
+    }).catch(function(error) {
+      console.error('Error loading admissions:', error);
+      var tbody = document.getElementById('admission-body');
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="6"><div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Error loading data</div><div class="state-sub">' + error.message + '</div></div></td></tr>';
+      }
+    });
   }
 
   function renderTableRows(admissions) {
@@ -147,10 +143,10 @@
         status: status,
         token: token,
         date: new Date().toISOString().split('T')[0],
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        createdAt: Date.now()
       };
 
-      db.collection(ADMISSIONS_COLLECTION).add(admissionData)
+      db.ref(ADMISSIONS_PATH).push(admissionData)
         .then(function() {
           window.closeModal();
           window.showToast('Admission added successfully for ' + name + '.', 'success');
@@ -194,7 +190,7 @@
         return;
       }
 
-      db.collection(ADMISSIONS_COLLECTION).doc(id).update({
+      db.ref(ADMISSIONS_PATH + '/' + id).update({
         name: name,
         class: cls,
         roll: roll,
@@ -216,7 +212,7 @@
     if (!item) return;
 
     if (confirm('Are you sure you want to delete the admission record for ' + (item.name || 'this student') + '?')) {
-      db.collection(ADMISSIONS_COLLECTION).doc(id).delete()
+      db.ref(ADMISSIONS_PATH + '/' + id).remove()
         .then(function() {
           window.showToast('Admission record deleted.', 'error');
           loadAdmissions();
