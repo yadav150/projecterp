@@ -40,13 +40,11 @@
 
   var guardEl = showGuard();
 
-  // Wait for auth state
   if (typeof firebase !== 'undefined' && firebase.auth) {
     var unsubscribe = firebase.auth().onAuthStateChanged(function(user) {
       unsubscribe();
       if (user) {
         hideGuard(guardEl);
-        // Update status dot in sidebar (will be done after DOM ready)
         document.addEventListener('DOMContentLoaded', function() {
           var dot = document.getElementById('fw-status-dot');
           var text = document.getElementById('fw-status-text');
@@ -54,12 +52,10 @@
           if (text) text.textContent = 'Online';
         });
       } else {
-        // Not logged in – redirect to login
         window.location.href = LOGIN_PAGE;
       }
     });
   } else {
-    // Fallback: check sessionStorage (if not using Firebase)
     var session = sessionStorage.getItem('erp_session');
     if (session === 'authenticated') {
       hideGuard(guardEl);
