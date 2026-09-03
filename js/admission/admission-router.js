@@ -2,38 +2,106 @@
 var db = window.db;
 
 var ADMISSIONS_PATH = 'admissions';
-var allAdmissions = [];
+var STUDENTS_PATH = 'students';
+var COUNTERS_PATH = 'admissionCounters';
 
+var allAdmissions = [];
+var currentEditId = null;
+
+// ---- Helper Functions ----
 function generateToken() {
   return Math.random().toString(36).substring(2, 8) + '-' +
          Math.random().toString(36).substring(2, 8) + '-' +
          Date.now().toString(36);
 }
 
+function getCurrentSession() {
+  var now = new Date();
+  var year = now.getFullYear();
+  var month = now.getMonth() + 1;
+  // Academic year runs April-March
+  var startYear = month >= 4 ? year : year - 1;
+  var endYear = startYear + 1;
+  return startYear + '-' + String(endYear).slice(-2);
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return 'N/A';
+  var d = new Date(dateStr);
+  return d.toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function getStatusBadge(status) {
+  var map = {
+    'Uploaded': '<span class="badge green">Uploaded</span>',
+    'Offline Declaration': '<span class="badge amber">Offline Declaration</span>',
+    'Pending': '<span class="badge slate">Pending</span>',
+    'Submitted': '<span class="badge green">Submitted</span>'
+  };
+  return map[status] || '<span class="badge slate">' + status + '</span>';
+}
+
+// ---- ID Generation ----
+function generateApplicationNumber(counter) {
+  var year = new Date().getFullYear();
+  var padded = String(counter).padStart(3, '0');
+  return 'APP-' + year + '-' + padded;
+}
+
+function generateAdmissionNumber(counter) {
+  var year = new Date().getFullYear();
+  var padded = String(counter).padStart(3, '0');
+  return 'ADM-' + year + '-' + padded;
+}
+
+function generateRollNumber(classVal, sectionVal, counter) {
+  var padded = String(counter).padStart(3, '0');
+  var section = sectionVal && sectionVal !== 'NA' ? '-' + sectionVal : '';
+  return classVal + section + '-' + padded;
+}
+
+function getCounterKey(classVal, sectionVal) {
+  var section = sectionVal && sectionVal !== 'NA' ? '-' + sectionVal : '';
+  return classVal + section;
+}
+
+function getNextCounter(path, defaultValue) {
+  return db.ref(COUNTERS_PATH + '/' + path).transaction(function(current) {
+    return (current || 0) + 1;
+  }).then(function(result) {
+    if (result.committed) {
+      return result.snapshot.val();
+    }
+    return defaultValue || 1;
+  });
+}
+
+// ---- Render Main View ----
 function render(container) {
   if (!container) return;
   if (!db) {
-    container.innerHTML = '<div class="state"><svg viewBox="0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Database not available</div></div>';
+    container.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Database not available</div></div>';
     return;
   }
 
   var html = '' +
     '<div class="page-header">' +
-      '<div><h1 class="page-title">Admission</h1><p class="page-subtitle">Manage student admissions and enrollments</p></div>' +
-      '<div class="page-actions"><button class="btn btn-primary" onclick="window.admissionModule.openAddModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Admission</button></div>' +
+      '<div><h1 class="page-title">Admission</h1><p class="page-subtitle">Multi-stage student admission workflow</p></div>' +
+      '<div class="page-actions"><button class="btn btn-primary" onclick="window.admissionModule.openNewAdmission()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Admission</button></div>' +
     '</div>' +
     '<div class="filter-bar">' +
-      '<div class="search-input"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Search admissions..." id="admission-search" oninput="window.admissionModule.filterTable()"></div>' +
-      '<select class="select" id="admission-status-filter" onchange="window.admissionModule.filterTable()"><option value="">All Statuses</option><option value="Enrolled">Enrolled</option><option value="Pending">Pending</option></select>' +
+      '<div class="search-input"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Search by name, application number..." id="admission-search" oninput="window.admissionModule.filterTable()"></div>' +
+      '<select class="select" id="admission-status-filter" onchange="window.admissionModule.filterTable()"><option value="">All Statuses</option><option value="Draft">Draft</option><option value="Submitted">Submitted</option></select>' +
     '</div>' +
-    '<div class="table-wrap"><div class="table-scroll"><table class="data-table"><thead><tr><th>Student</th><th>Class</th><th>Roll</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead><tbody id="admission-body"><tr><td colspan="6"><div class="state"><div class="spinner"></div></div></td></tr></tbody></table></div></div>';
+    '<div class="table-wrap"><div class="table-scroll"><table class="data-table"><thead><tr><th>Application #</th><th>Student</th><th>Class</th><th>Admission #</th><th>Status</th><th>Actions</th></tr></thead><tbody id="admission-body"><tr><td colspan="6"><div class="state"><div class="spinner"></div></div></td></tr></tbody></table></div></div>';
 
   container.innerHTML = html;
 
   window.admissionModule = {
     render: render,
-    openAddModal: openAddModal,
-    openEditModal: openEditModal,
+    openNewAdmission: openNewAdmission,
+    openEditAdmission: openEditAdmission,
+    viewAdmission: viewAdmission,
     deleteRecord: deleteRecord,
     filterTable: filterTable,
     downloadPDF: downloadPDF
@@ -42,8 +110,8 @@ function render(container) {
   loadAdmissions();
 }
 
+// ---- Load Admissions ----
 function loadAdmissions() {
-  if (!db) return;
   db.ref(ADMISSIONS_PATH).once('value').then(function(snapshot) {
     allAdmissions = [];
     snapshot.forEach(function(child) {
@@ -51,150 +119,164 @@ function loadAdmissions() {
       data.id = child.key;
       allAdmissions.push(data);
     });
+    // Sort by createdAt descending
+    allAdmissions.sort(function(a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
     renderTableRows(allAdmissions);
   }).catch(function(error) {
     console.error('Error loading admissions:', error);
     var tbody = document.getElementById('admission-body');
     if (tbody) {
-      tbody.innerHTML = '<tr><td colspan="6"><div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Error loading data</div><div class="state-sub">' + error.message + '</div></div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="6"><div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Error loading data</div></div></td></tr>';
     }
   });
 }
 
+// ---- Render Table Rows ----
 function renderTableRows(admissions) {
   var tbody = document.getElementById('admission-body');
   if (!tbody) return;
+
   if (!admissions || admissions.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><div class="state-title">No admissions found</div></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6"><div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><div class="state-title">No admissions found</div><div class="state-sub">Click "New Admission" to start a new application.</div></div></td></tr>';
     return;
   }
+
   var rows = '';
   admissions.forEach(function(item) {
-    var statusBadge = item.status === 'Enrolled' ? '<span class="badge green">Enrolled</span>' : '<span class="badge amber">Pending</span>';
-    var initials = item.name ? item.name.split(' ').map(function(n){return n.charAt(0)}).join('').toUpperCase() : '?';
+    var studentName = item.student ? item.student.name : 'N/A';
+    var studentClass = item.student ? item.student.class : 'N/A';
+    var appNum = item.applicationNumber || 'N/A';
+    var admNum = item.admissionNumber || '—';
+    var statusBadge = item.status === 'Submitted' ? '<span class="badge green">Submitted</span>' : '<span class="badge amber">Draft</span>';
+
     rows += '' +
       '<tr>' +
-        '<td><div class="cell-user"><span class="avatar">' + initials + '</span><div><div class="u-name">' + (item.name || 'N/A') + '</div></div></div></td>' +
-        '<td>' + (item.class || 'N/A') + '</td>' +
-        '<td>' + (item.roll || 'N/A') + '</td>' +
-        '<td>' + (item.date || 'N/A') + '</td>' +
+        '<td><strong>' + appNum + '</strong></td>' +
+        '<td>' + studentName + '</td>' +
+        '<td>' + studentClass + '</td>' +
+        '<td>' + admNum + '</td>' +
         '<td>' + statusBadge + '</td>' +
         '<td><div class="row-actions">' +
-          '<button class="icon-btn-sm" onclick="window.admissionModule.openEditModal(\'' + item.id + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' +
-          '<button class="icon-btn-sm" onclick="window.admissionModule.downloadPDF(\'' + item.id + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></button>' +
-          '<button class="icon-btn-sm danger" onclick="window.admissionModule.deleteRecord(\'' + item.id + '\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>' +
+          '<button class="icon-btn-sm" onclick="window.admissionModule.viewAdmission(\'' + item.id + '\')" title="View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>' +
+          '<button class="icon-btn-sm" onclick="window.admissionModule.openEditAdmission(\'' + item.id + '\')" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' +
+          '<button class="icon-btn-sm" onclick="window.admissionModule.downloadPDF(\'' + item.id + '\')" title="Download PDF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></button>' +
+          '<button class="icon-btn-sm danger" onclick="window.admissionModule.deleteRecord(\'' + item.id + '\')" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>' +
         '</div></td>' +
       '</tr>';
   });
   tbody.innerHTML = rows;
 }
 
+// ---- Filter Table ----
 function filterTable() {
   var search = document.getElementById('admission-search');
   var statusFilter = document.getElementById('admission-status-filter');
   var query = search ? search.value.toLowerCase() : '';
   var status = statusFilter ? statusFilter.value : '';
+
   var filtered = allAdmissions.filter(function(item) {
-    var matchName = (item.name || '').toLowerCase().includes(query);
+    var studentName = (item.student && item.student.name) || '';
+    var appNum = item.applicationNumber || '';
+    var matchQuery = studentName.toLowerCase().includes(query) || appNum.toLowerCase().includes(query);
     var matchStatus = status === '' || item.status === status;
-    return matchName && matchStatus;
+    return matchQuery && matchStatus;
   });
   renderTableRows(filtered);
 }
 
-function openAddModal() {
-  var bodyHtml = '' +
-    '<div class="form-grid">' +
-      '<div class="form-row"><label>Full Name <span class="req">*</span></label><input class="input" id="add-name" placeholder="Enter student name" /></div>' +
-      '<div class="form-row"><label>Class <span class="req">*</span></label><input class="input" id="add-class" placeholder="e.g. 10-A" /></div>' +
-      '<div class="form-row"><label>Roll Number <span class="req">*</span></label><input class="input" id="add-roll" placeholder="Enter roll number" /></div>' +
-      '<div class="form-row"><label>Status</label><select class="select" id="add-status"><option value="Enrolled">Enrolled</option><option value="Pending">Pending</option></select></div>' +
-    '</div>';
-  var footerHtml = '' +
-    '<button class="btn btn-outline" onclick="window.closeModal()">Cancel</button>' +
-    '<button class="btn btn-primary" id="save-add-btn">Save Admission</button>';
-  window.openModal('New Admission', bodyHtml, footerHtml, false);
-
-  document.getElementById('save-add-btn').addEventListener('click', function() {
-    var name = document.getElementById('add-name').value.trim();
-    var cls = document.getElementById('add-class').value.trim();
-    var roll = document.getElementById('add-roll').value.trim();
-    var status = document.getElementById('add-status').value;
-    if (!name || !cls || !roll) {
-      window.showToast('Please fill in all required fields.', 'error');
-      return;
-    }
-    var token = generateToken();
-    var admissionData = {
-      name: name,
-      class: cls,
-      roll: roll,
-      status: status,
-      token: token,
-      date: new Date().toISOString().split('T')[0],
-      createdAt: Date.now()
-    };
-    db.ref(ADMISSIONS_PATH).push(admissionData)
-      .then(function() {
-        window.closeModal();
-        window.showToast('Admission added successfully for ' + name + '.', 'success');
-        loadAdmissions();
-      })
-      .catch(function(error) {
-        window.showToast('Error saving admission: ' + error.message, 'error');
-      });
-  });
-}
-
-function openEditModal(id) {
+// ---- View Admission ----
+function viewAdmission(id) {
   var item = allAdmissions.find(function(a) { return a.id === id; });
   if (!item) {
     window.showToast('Record not found.', 'error');
     return;
   }
-  var bodyHtml = '' +
-    '<div class="form-grid">' +
-      '<div class="form-row"><label>Full Name <span class="req">*</span></label><input class="input" id="edit-name" value="' + (item.name || '') + '" /></div>' +
-      '<div class="form-row"><label>Class <span class="req">*</span></label><input class="input" id="edit-class" value="' + (item.class || '') + '" /></div>' +
-      '<div class="form-row"><label>Roll Number <span class="req">*</span></label><input class="input" id="edit-roll" value="' + (item.roll || '') + '" /></div>' +
-      '<div class="form-row"><label>Status</label><select class="select" id="edit-status"><option value="Enrolled"' + (item.status === 'Enrolled' ? ' selected' : '') + '>Enrolled</option><option value="Pending"' + (item.status === 'Pending' ? ' selected' : '') + '>Pending</option></select></div>' +
-    '</div>';
-  var footerHtml = '' +
-    '<button class="btn btn-outline" onclick="window.closeModal()">Cancel</button>' +
-    '<button class="btn btn-primary" id="save-edit-btn">Update Admission</button>';
-  window.openModal('Edit Admission', bodyHtml, footerHtml, false);
 
-  document.getElementById('save-edit-btn').addEventListener('click', function() {
-    var name = document.getElementById('edit-name').value.trim();
-    var cls = document.getElementById('edit-class').value.trim();
-    var roll = document.getElementById('edit-roll').value.trim();
-    var status = document.getElementById('edit-status').value;
-    if (!name || !cls || !roll) {
-      window.showToast('Please fill in all required fields.', 'error');
-      return;
-    }
-    db.ref(ADMISSIONS_PATH + '/' + id).update({
-      name: name,
-      class: cls,
-      roll: roll,
-      status: status
-    })
-    .then(function() {
-      window.closeModal();
-      window.showToast('Admission updated successfully.', 'success');
-      loadAdmissions();
-    })
-    .catch(function(error) {
-      window.showToast('Error updating: ' + error.message, 'error');
-    });
-  });
+  var s = item.student || {};
+  var p = item.parent || {};
+  var a = item.address || {};
+  var prv = item.previous || {};
+  var docs = item.documents || {};
+  var photoStatus = docs.photo ? docs.photo.status : 'Pending';
+  var photoUrl = docs.photo ? docs.photo.url : '';
+
+  var bodyHtml = '' +
+    '<div style="margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">' +
+      '<div><strong>Application #:</strong> ' + (item.applicationNumber || 'N/A') + ' &nbsp;|&nbsp; <strong>Admission #:</strong> ' + (item.admissionNumber || '—') + ' &nbsp;|&nbsp; <strong>Roll #:</strong> ' + (item.rollNumber || '—') + '</div>' +
+      '<div>Status: ' + getStatusBadge(item.status || 'Draft') + '</div>' +
+    '</div>' +
+    '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;padding:12px;background:#f8fafc;border-radius:5px;border:1px solid #e2e8f0;align-items:center;">' +
+      '<div style="flex-shrink:0;">' +
+        (photoUrl ? '<img src="' + photoUrl + '" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #e2e8f0;" />' :
+        '<div style="width:80px;height:80px;border-radius:50%;background:#f1f5f9;display:grid;place-items:center;color:#94a3b8;font-size:28px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:32px;height:32px;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="12" r="4"/></svg></div>') +
+      '</div>' +
+      '<div><strong>' + (s.name || 'N/A') + '</strong><br><span style="color:#64748b;font-size:13px;">' + (s.class || 'N/A') + (s.section ? ' - ' + s.section : '') + '</span></div>' +
+    '</div>' +
+    '<div class="two-col">' +
+      '<div><h4 style="margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;">Student Information</h4>' +
+        '<div class="detail-row"><span class="k">Name</span><span class="v">' + (s.name || 'N/A') + '</span></div>' +
+        '<div class="detail-row"><span class="k">Date of Birth</span><span class="v">' + formatDate(s.dob) + '</span></div>' +
+        '<div class="detail-row"><span class="k">Gender</span><span class="v">' + (s.gender || 'N/A') + '</span></div>' +
+        '<div class="detail-row"><span class="k">Aadhaar</span><span class="v">' + (s.aadhaar || 'N/A') + '</span></div>' +
+        '<div class="detail-row"><span class="k">Class</span><span class="v">' + (s.class || 'N/A') + '</span></div>' +
+        '<div class="detail-row"><span class="k">Section</span><span class="v">' + (s.section || 'N/A') + '</span></div>' +
+      '</div>' +
+      '<div><h4 style="margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;">Parent / Guardian</h4>' +
+        '<div class="detail-row"><span class="k">Father</span><span class="v">' + (p.fatherName || 'N/A') + '</span></div>' +
+        '<div class="detail-row"><span class="k">Mother</span><span class="v">' + (p.motherName || 'N/A') + '</span></div>' +
+        (p.guardianName ? '<div class="detail-row"><span class="k">Guardian</span><span class="v">' + p.guardianName + (p.guardianRelation ? ' (' + p.guardianRelation + ')' : '') + '</span></div>' : '') +
+        '<div class="detail-row"><span class="k">Contact</span><span class="v">' + (p.contact || 'N/A') + '</span></div>' +
+        '<div class="detail-row"><span class="k">Email</span><span class="v">' + (p.email || 'N/A') + '</span></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="two-col" style="margin-top:12px;">' +
+      '<div><h4 style="margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;">Address</h4>' +
+        '<div class="detail-row"><span class="k">Present</span><span class="v">' + (a.present || 'N/A') + '</span></div>' +
+        '<div class="detail-row"><span class="k">Permanent</span><span class="v">' + (a.permanent || 'N/A') + '</span></div>' +
+        '<div class="detail-row"><span class="k">Village/Town</span><span class="v">' + (a.village || 'N/A') + '</span></div>' +
+        '<div class="detail-row"><span class="k">District</span><span class="v">' + (a.district || 'N/A') + '</span></div>' +
+        '<div class="detail-row"><span class="k">State</span><span class="v">' + (a.state || 'N/A') + '</span></div>' +
+        '<div class="detail-row"><span class="k">PIN</span><span class="v">' + (a.pinCode || 'N/A') + '</span></div>' +
+        '<div class="detail-row"><span class="k">Emergency</span><span class="v">' + (a.emergencyContact || 'N/A') + '</span></div>' +
+      '</div>' +
+      '<div><h4 style="margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;">Previous Academic</h4>' +
+        '<div class="detail-row"><span class="k">Previous School</span><span class="v">' + (prv.school || 'N/A') + '</span></div>' +
+        '<div class="detail-row"><span class="k">Previous Class</span><span class="v">' + (prv.class || 'N/A') + '</span></div>' +
+        '<div class="detail-row"><span class="k">Board</span><span class="v">' + (prv.board || 'N/A') + '</span></div>' +
+        '<div class="detail-row"><span class="k">Previous Roll #</span><span class="v">' + (prv.rollNumber || 'N/A') + '</span></div>' +
+      '</div>' +
+    '</div>' +
+    '<div style="margin-top:16px;"><h4 style="margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;">Documents</h4>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:#f8fafc;"><th style="padding:8px;text-align:left;border:1px solid #e2e8f0;">Document</th><th style="padding:8px;text-align:left;border:1px solid #e2e8f0;">Status</th></tr></thead><tbody>' +
+      '<tr><td style="padding:8px;border:1px solid #e2e8f0;">Passport Photo</td><td style="padding:8px;border:1px solid #e2e8f0;">' + getStatusBadge(photoStatus) + '</td></tr>' +
+      '<tr><td style="padding:8px;border:1px solid #e2e8f0;">Aadhaar Card</td><td style="padding:8px;border:1px solid #e2e8f0;">' + getStatusBadge(docs.aadhaar ? docs.aadhaar.status : 'Pending') + '</td></tr>' +
+      '<tr><td style="padding:8px;border:1px solid #e2e8f0;">Birth Certificate</td><td style="padding:8px;border:1px solid #e2e8f0;">' + getStatusBadge(docs.birthCertificate ? docs.birthCertificate.status : 'Pending') + '</td></tr>' +
+      '<tr><td style="padding:8px;border:1px solid #e2e8f0;">Transfer Certificate</td><td style="padding:8px;border:1px solid #e2e8f0;">' + getStatusBadge(docs.transferCertificate ? docs.transferCertificate.status : 'Pending') + '</td></tr>' +
+      '<tr><td style="padding:8px;border:1px solid #e2e8f0;">Previous Marksheet</td><td style="padding:8px;border:1px solid #e2e8f0;">' + getStatusBadge(docs.marksheet ? docs.marksheet.status : 'Pending') + '</td></tr>' +
+      '</tbody></table>' +
+    '</div>';
+
+  var footerHtml = '' +
+    '<button class="btn btn-outline" onclick="window.closeModal()">Close</button>' +
+    (item.status !== 'Submitted' ? '<button class="btn btn-primary" onclick="window.closeModal();window.admissionModule.openEditAdmission(\'' + item.id + '\')">Edit Application</button>' : '') +
+    '<button class="btn btn-primary" onclick="window.closeModal();window.admissionModule.downloadPDF(\'' + item.id + '\')">Download PDF</button>';
+
+  window.openModal('Admission Details', bodyHtml, footerHtml, true);
 }
 
+// ---- Delete Record ----
 function deleteRecord(id) {
   var item = allAdmissions.find(function(a) { return a.id === id; });
   if (!item) return;
-  if (confirm('Are you sure you want to delete the admission record for ' + (item.name || 'this student') + '?')) {
-    db.ref(ADMISSIONS_PATH + '/' + id).remove()
+  if (confirm('Are you sure you want to delete this admission record?')) {
+    // Also delete the associated student record if it exists
+    var studentId = item.studentId;
+    var updates = {};
+    updates[ADMISSIONS_PATH + '/' + id] = null;
+    if (studentId) {
+      updates[STUDENTS_PATH + '/' + studentId] = null;
+    }
+    db.ref().update(updates)
       .then(function() {
         window.showToast('Admission record deleted.', 'error');
         loadAdmissions();
@@ -205,35 +287,962 @@ function deleteRecord(id) {
   }
 }
 
+// ---- OPEN NEW ADMISSION (Multi-Step) ----
+function openNewAdmission() {
+  currentEditId = null;
+  showStep(1);
+}
+
+function openEditAdmission(id) {
+  currentEditId = id;
+  var item = allAdmissions.find(function(a) { return a.id === id; });
+  if (!item) {
+    window.showToast('Record not found.', 'error');
+    return;
+  }
+  // Determine which step to start from based on saved data
+  var step = 1;
+  if (item.student) step = 2;
+  if (item.parent) step = 3;
+  if (item.address) step = 4;
+  if (item.previous) step = 5;
+  if (item.documents) step = 6;
+  if (item.status === 'Submitted') step = 7;
+  // But allow starting from step 1 for editing
+  showStep(1, item);
+}
+
+// ---- Step Renderer ----
+var stepData = {};
+
+function showStep(step, existingData) {
+  var root = document.getElementById('modal-root');
+  if (!root) return;
+
+  var data = existingData || stepData;
+  if (existingData) {
+    stepData = JSON.parse(JSON.stringify(existingData));
+  }
+
+  var totalSteps = 7;
+  var stepTitles = [
+    'Student Information',
+    'Parent / Guardian',
+    'Address & Contact',
+    'Previous Academic',
+    'Documents',
+    'Review & Confirmation',
+    'Submit'
+  ];
+
+  var stepDescriptions = [
+    'Basic student details, class, and admission information',
+    'Parent and guardian contact details',
+    'Present and permanent address with emergency contact',
+    'Previous school and academic history',
+    'Upload documents or declare offline submission',
+    'Verify all information before final submission',
+    'Confirm and complete the admission'
+  ];
+
+  // Build the step content
+  var content = '';
+
+  // Step indicators
+  content += '<div style="display:flex;justify-content:space-between;margin-bottom:24px;gap:4px;padding:0 4px;">';
+  for (var i = 1; i <= totalSteps; i++) {
+    var isActive = i === step;
+    var isCompleted = i < step;
+    var label = i;
+    var cls = 'step-indicator';
+    if (isActive) cls += ' active';
+    if (isCompleted) cls += ' completed';
+    content += '<div class="' + cls + '" style="flex:1;text-align:center;padding:8px 4px;border-radius:5px;font-size:11px;font-weight:600;' +
+      (isActive ? 'background:#dc3545;color:#fff;' :
+       isCompleted ? 'background:#e6f4ea;color:#1e7e34;' :
+       'background:#f1f5f9;color:#94a3b8;') + '">' + label + '</div>';
+  }
+  content += '</div>';
+
+  // Step title and description
+  content += '<h3 style="margin:0 0 4px;">' + stepTitles[step-1] + '</h3>';
+  content += '<p style="margin:0 0 20px;color:#64748b;font-size:13px;">' + stepDescriptions[step-1] + '</p>';
+
+  // Step content
+  content += '<div id="step-content">';
+  content += renderStepContent(step, data);
+  content += '</div>';
+
+  // Navigation buttons
+  content += '<div style="display:flex;justify-content:space-between;margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;flex-wrap:wrap;gap:8px;">';
+  if (step > 1) {
+    content += '<button class="btn btn-outline" onclick="window.admissionModule.goToStep(' + (step-1) + ')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><polyline points="15 18 9 12 15 6"/></svg> Back</button>';
+  } else {
+    content += '<button class="btn btn-outline" onclick="window.closeModal()">Cancel</button>';
+  }
+  if (step < totalSteps) {
+    content += '<button class="btn btn-primary" onclick="window.admissionModule.goToStep(' + (step+1) + ')">Next <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><polyline points="9 18 15 12 9 6"/></svg></button>';
+  } else {
+    content += '<button class="btn btn-primary" id="final-submit-btn" onclick="window.admissionModule.submitAdmission()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Submit Admission</button>';
+  }
+  content += '</div>';
+
+  // Inject into modal
+  var footerHtml = '';
+  var modalTitle = 'Admission Application' + (currentEditId ? ' (Edit)' : '') + ' — Step ' + step + ' of ' + totalSteps;
+
+  var backdrop = document.createElement('div');
+  backdrop.className = 'modal-backdrop';
+  backdrop.addEventListener('click', function(e) {
+    if (e.target === backdrop) window.closeModal();
+  });
+
+  backdrop.innerHTML = '' +
+    '<div class="modal large" role="dialog" aria-modal="true" style="max-width:900px;">' +
+      '<div class="modal-head">' +
+        '<div class="modal-title">' + modalTitle + '</div>' +
+        '<button class="modal-close" onclick="window.closeModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
+      '</div>' +
+      '<div class="modal-body" id="step-modal-body">' + content + '</div>' +
+      '<div class="modal-foot" style="display:none;"></div>' +
+    '</div>';
+
+  root.innerHTML = '';
+  root.appendChild(backdrop);
+
+  // Add inline styles for step indicators
+  var style = document.createElement('style');
+  style.textContent = '' +
+    '.step-indicator { transition: all 0.3s ease; cursor: default; }' +
+    '.step-indicator.completed { background: #e6f4ea !important; color: #1e7e34 !important; }' +
+    '.step-indicator.active { background: #dc3545 !important; color: #fff !important; }' +
+    '.step-indicator:not(.active):not(.completed) { background: #f1f5f9 !important; color: #94a3b8 !important; }';
+  document.head.appendChild(style);
+}
+
+function renderStepContent(step, data) {
+  var html = '';
+  switch(step) {
+    case 1:
+      html = renderStep1(data);
+      break;
+    case 2:
+      html = renderStep2(data);
+      break;
+    case 3:
+      html = renderStep3(data);
+      break;
+    case 4:
+      html = renderStep4(data);
+      break;
+    case 5:
+      html = renderStep5(data);
+      break;
+    case 6:
+      html = renderStep6(data);
+      break;
+    case 7:
+      html = renderStep7(data);
+      break;
+  }
+  return html;
+}
+
+// ---- STEP 1: Student Information ----
+function renderStep1(data) {
+  var s = data.student || {};
+  return '' +
+    '<div class="form-grid">' +
+      '<div class="form-row"><label>Academic Session</label><input class="input" id="s1-session" value="' + getCurrentSession() + '" readonly style="background:#f1f5f9;" /></div>' +
+      '<div class="form-row"><label>Admission Date <span class="req">*</span></label><input class="input" type="date" id="s1-admission-date" value="' + (s.admissionDate || new Date().toISOString().split('T')[0]) + '" /></div>' +
+      '<div class="form-row"><label>Student Name <span class="req">*</span></label><input class="input" id="s1-name" value="' + (s.name || '') + '" placeholder="Enter full name" /></div>' +
+      '<div class="form-row"><label>Date of Birth <span class="req">*</span></label><input class="input" type="date" id="s1-dob" value="' + (s.dob || '') + '" /></div>' +
+      '<div class="form-row"><label>Gender <span class="req">*</span></label><select class="select" id="s1-gender"><option value="">Select</option><option value="Male"' + (s.gender === 'Male' ? ' selected' : '') + '>Male</option><option value="Female"' + (s.gender === 'Female' ? ' selected' : '') + '>Female</option><option value="Other"' + (s.gender === 'Other' ? ' selected' : '') + '>Other</option></select></div>' +
+      '<div class="form-row"><label>Aadhaar Number</label><input class="input" id="s1-aadhaar" value="' + (s.aadhaar || '') + '" placeholder="XXXX-XXXX-XXXX" /></div>' +
+      '<div class="form-row"><label>Class <span class="req">*</span></label><select class="select" id="s1-class"><option value="">Select</option><option value="Nursery"' + (s.class === 'Nursery' ? ' selected' : '') + '>Nursery</option><option value="KG1"' + (s.class === 'KG1' ? ' selected' : '') + '>KG1</option><option value="KG2"' + (s.class === 'KG2' ? ' selected' : '') + '>KG2</option><option value="1"' + (s.class === '1' ? ' selected' : '') + '>Class 1</option><option value="2"' + (s.class === '2' ? ' selected' : '') + '>Class 2</option><option value="3"' + (s.class === '3' ? ' selected' : '') + '>Class 3</option><option value="4"' + (s.class === '4' ? ' selected' : '') + '>Class 4</option><option value="5"' + (s.class === '5' ? ' selected' : '') + '>Class 5</option><option value="6"' + (s.class === '6' ? ' selected' : '') + '>Class 6</option><option value="7"' + (s.class === '7' ? ' selected' : '') + '>Class 7</option><option value="8"' + (s.class === '8' ? ' selected' : '') + '>Class 8</option><option value="9"' + (s.class === '9' ? ' selected' : '') + '>Class 9</option><option value="10"' + (s.class === '10' ? ' selected' : '') + '>Class 10</option></select></div>' +
+      '<div class="form-row"><label>Section</label><select class="select" id="s1-section"><option value="NA"' + (!s.section || s.section === 'NA' ? ' selected' : '') + '>NA</option><option value="A"' + (s.section === 'A' ? ' selected' : '') + '>A</option><option value="B"' + (s.section === 'B' ? ' selected' : '') + '>B</option><option value="C"' + (s.section === 'C' ? ' selected' : '') + '>C</option></select></div>' +
+    '</div>' +
+    '<div style="margin-top:12px;padding:12px;background:#f8fafc;border-radius:5px;border:1px solid #e2e8f0;font-size:12px;color:#64748b;">' +
+      '<div style="display:flex;gap:20px;flex-wrap:wrap;">' +
+        '<div><strong>Application Number:</strong> <span id="s1-app-number">' + (data.applicationNumber || 'Will be auto-generated') + '</span></div>' +
+      '</div>' +
+    '</div>';
+}
+
+// ---- STEP 2: Parent / Guardian ----
+function renderStep2(data) {
+  var p = data.parent || {};
+  return '' +
+    '<div class="form-grid">' +
+      '<div class="form-row"><label>Father\'s Name <span class="req">*</span></label><input class="input" id="s2-father" value="' + (p.fatherName || '') + '" placeholder="Enter father\'s name" /></div>' +
+      '<div class="form-row"><label>Mother\'s Name <span class="req">*</span></label><input class="input" id="s2-mother" value="' + (p.motherName || '') + '" placeholder="Enter mother\'s name" /></div>' +
+      '<div class="form-row"><label>Guardian Name</label><input class="input" id="s2-guardian-name" value="' + (p.guardianName || '') + '" placeholder="If applicable" /></div>' +
+      '<div class="form-row"><label>Guardian Relation</label><input class="input" id="s2-guardian-relation" value="' + (p.guardianRelation || '') + '" placeholder="e.g. Uncle, Grandparent" /></div>' +
+      '<div class="form-row"><label>Contact Number <span class="req">*</span></label><input class="input" id="s2-contact" value="' + (p.contact || '') + '" placeholder="10-digit mobile number" /></div>' +
+      '<div class="form-row"><label>Email Address</label><input class="input" type="email" id="s2-email" value="' + (p.email || '') + '" placeholder="email@example.com" /></div>' +
+    '</div>';
+}
+
+// ---- STEP 3: Address & Contact ----
+function renderStep3(data) {
+  var a = data.address || {};
+  return '' +
+    '<div class="form-grid">' +
+      '<div class="form-row" style="grid-column:1/-1;"><label>Present Address <span class="req">*</span></label><textarea class="textarea" id="s3-present" rows="2">' + (a.present || '') + '</textarea></div>' +
+      '<div class="form-row" style="grid-column:1/-1;"><label>Permanent Address</label><textarea class="textarea" id="s3-permanent" rows="2">' + (a.permanent || '') + '</textarea></div>' +
+      '<div class="form-row"><label>Village / Town <span class="req">*</span></label><input class="input" id="s3-village" value="' + (a.village || '') + '" placeholder="Village or town name" /></div>' +
+      '<div class="form-row"><label>District <span class="req">*</span></label><input class="input" id="s3-district" value="' + (a.district || '') + '" placeholder="District name" /></div>' +
+      '<div class="form-row"><label>State <span class="req">*</span></label><input class="input" id="s3-state" value="' + (a.state || '') + '" placeholder="State name" /></div>' +
+      '<div class="form-row"><label>PIN Code <span class="req">*</span></label><input class="input" id="s3-pin" value="' + (a.pinCode || '') + '" placeholder="6-digit PIN" /></div>' +
+      '<div class="form-row"><label>Emergency Contact <span class="req">*</span></label><input class="input" id="s3-emergency" value="' + (a.emergencyContact || '') + '" placeholder="10-digit number" /></div>' +
+    '</div>';
+}
+
+// ---- STEP 4: Previous Academic ----
+function renderStep4(data) {
+  var p = data.previous || {};
+  return '' +
+    '<div class="form-grid">' +
+      '<div class="form-row"><label>Previous School</label><input class="input" id="s4-school" value="' + (p.school || '') + '" placeholder="School name" /></div>' +
+      '<div class="form-row"><label>Previous Class</label><input class="input" id="s4-class" value="' + (p.class || '') + '" placeholder="e.g. 9" /></div>' +
+      '<div class="form-row"><label>Board</label><input class="input" id="s4-board" value="' + (p.board || '') + '" placeholder="e.g. CBSE, ICSE" /></div>' +
+      '<div class="form-row"><label>Previous Roll Number</label><input class="input" id="s4-roll" value="' + (p.rollNumber || '') + '" placeholder="Previous roll number" /></div>' +
+    '</div>';
+}
+
+// ---- STEP 5: Documents ----
+function renderStep5(data) {
+  var docs = data.documents || {};
+  var photo = docs.photo || {};
+  var aadhaar = docs.aadhaar || {};
+  var birthCert = docs.birthCertificate || {};
+  var transferCert = docs.transferCertificate || {};
+  var marksheet = docs.marksheet || {};
+
+  var photoStatus = photo.status || 'Pending';
+  var photoUrl = photo.url || '';
+  var aadhaarStatus = aadhaar.status || 'Pending';
+  var aadhaarDeclared = aadhaar.declared || false;
+  var birthCertStatus = birthCert.status || 'Pending';
+  var birthCertDeclared = birthCert.declared || false;
+  var transferCertStatus = transferCert.status || 'Pending';
+  var transferCertDeclared = transferCert.declared || false;
+  var marksheetStatus = marksheet.status || 'Pending';
+  var marksheetDeclared = marksheet.declared || false;
+
+  var offlineDeclared = docs.offlineDeclared || false;
+
+  return '' +
+    '<div style="margin-bottom:16px;padding:12px;background:#fef3cd;border-radius:5px;border:1px solid #f6c23e;font-size:13px;color:#856404;">' +
+      '<strong>Note:</strong> Passport photo is mandatory. Other documents can be submitted offline by selecting the declaration below.' +
+    '</div>' +
+
+    '<h4 style="margin:0 0 12px;font-size:13px;font-weight:600;color:#1e293b;">1. Passport / Applicant Photo <span style="color:#dc3545;">*</span></h4>' +
+    '<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-bottom:16px;padding:12px;border:1px solid #e2e8f0;border-radius:5px;background:#fafbfe;">' +
+      '<div style="flex-shrink:0;">' +
+        (photoUrl ? '<img src="' + photoUrl + '" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #e2e8f0;" />' :
+        '<div style="width:80px;height:80px;border-radius:50%;background:#f1f5f9;display:grid;place-items:center;color:#94a3b8;font-size:28px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:32px;height:32px;"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="12" r="4"/></svg></div>') +
+      '</div>' +
+      '<div style="flex:1;">' +
+        '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+          '<button class="btn btn-sm btn-outline" onclick="window.admissionModule.uploadPhoto()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Upload Photo</button>' +
+          (photoUrl ? '<button class="btn btn-sm btn-danger" onclick="window.admissionModule.removePhoto()">Remove</button>' : '') +
+        '</div>' +
+        '<div style="font-size:12px;color:#64748b;margin-top:4px;">Max size: 500 KB • JPG, PNG only • ' + (photoStatus === 'Uploaded' ? 'Status: <span class="badge green">Uploaded</span>' : 'Status: <span class="badge amber">' + photoStatus + '</span>') + '</div>' +
+        '<div id="photo-upload-status" style="font-size:12px;color:#dc3545;margin-top:4px;"></div>' +
+      '</div>' +
+    '</div>' +
+
+    '<h4 style="margin:20px 0 12px;font-size:13px;font-weight:600;color:#1e293b;">2. Other Documents</h4>' +
+    '<div style="display:grid;gap:10px;grid-template-columns:1fr 1fr;margin-bottom:16px;">' +
+      '<div style="padding:10px;border:1px solid #e2e8f0;border-radius:5px;"><div style="font-weight:500;">Aadhaar Card</div><div>' + getStatusBadge(aadhaarStatus) + (aadhaarDeclared ? ' (Offline)' : '') + '</div></div>' +
+      '<div style="padding:10px;border:1px solid #e2e8f0;border-radius:5px;"><div style="font-weight:500;">Birth Certificate</div><div>' + getStatusBadge(birthCertStatus) + (birthCertDeclared ? ' (Offline)' : '') + '</div></div>' +
+      '<div style="padding:10px;border:1px solid #e2e8f0;border-radius:5px;"><div style="font-weight:500;">Transfer Certificate</div><div>' + getStatusBadge(transferCertStatus) + (transferCertDeclared ? ' (Offline)' : '') + '</div></div>' +
+      '<div style="padding:10px;border:1px solid #e2e8f0;border-radius:5px;"><div style="font-weight:500;">Previous Marksheet</div><div>' + getStatusBadge(marksheetStatus) + (marksheetDeclared ? ' (Offline)' : '') + '</div></div>' +
+    '</div>' +
+
+    '<div style="display:flex;gap:12px;align-items:flex-start;padding:12px;border:1px solid #e2e8f0;border-radius:5px;background:#f8fafc;">' +
+      '<input type="checkbox" id="s5-offline-declaration" style="margin-top:2px;width:18px;height:18px;" ' + (offlineDeclared ? 'checked' : '') + ' onchange="window.admissionModule.toggleOfflineDeclaration(this.checked)">' +
+      '<label for="s5-offline-declaration" style="font-size:13px;cursor:pointer;">In case of offline submission, I declare and skip the online document upload for the above documents. (Photo is still mandatory online.)</label>' +
+    '</div>';
+}
+
+// ---- STEP 6: Review & Confirmation ----
+function renderStep6(data) {
+  var s = data.student || {};
+  var p = data.parent || {};
+  var a = data.address || {};
+  var prv = data.previous || {};
+  var docs = data.documents || {};
+
+  var photoStatus = docs.photo ? docs.photo.status : 'Pending';
+  var photoUrl = docs.photo ? docs.photo.url : '';
+
+  var reviewSections = [
+    { title: 'Student Information', fields: [
+      ['Name', s.name || '—'],
+      ['Date of Birth', formatDate(s.dob)],
+      ['Gender', s.gender || '—'],
+      ['Aadhaar', s.aadhaar || '—'],
+      ['Class', s.class || '—'],
+      ['Section', s.section || '—']
+    ]},
+    { title: 'Parent / Guardian', fields: [
+      ['Father\'s Name', p.fatherName || '—'],
+      ['Mother\'s Name', p.motherName || '—'],
+      ['Guardian', (p.guardianName || '—') + (p.guardianRelation ? ' (' + p.guardianRelation + ')' : '')],
+      ['Contact', p.contact || '—'],
+      ['Email', p.email || '—']
+    ]},
+    { title: 'Address & Contact', fields: [
+      ['Present Address', a.present || '—'],
+      ['Permanent Address', a.permanent || '—'],
+      ['Village/Town', a.village || '—'],
+      ['District', a.district || '—'],
+      ['State', a.state || '—'],
+      ['PIN Code', a.pinCode || '—'],
+      ['Emergency Contact', a.emergencyContact || '—']
+    ]},
+    { title: 'Previous Academic', fields: [
+      ['Previous School', prv.school || '—'],
+      ['Previous Class', prv.class || '—'],
+      ['Board', prv.board || '—'],
+      ['Previous Roll #', prv.rollNumber || '—']
+    ]},
+    { title: 'Documents', fields: [
+      ['Passport Photo', photoStatus + (photoUrl ? ' (Uploaded)' : '')],
+      ['Aadhaar Card', (docs.aadhaar ? docs.aadhaar.status : 'Pending') + (docs.aadhaar && docs.aadhaar.declared ? ' (Offline)' : '')],
+      ['Birth Certificate', (docs.birthCertificate ? docs.birthCertificate.status : 'Pending') + (docs.birthCertificate && docs.birthCertificate.declared ? ' (Offline)' : '')],
+      ['Transfer Certificate', (docs.transferCertificate ? docs.transferCertificate.status : 'Pending') + (docs.transferCertificate && docs.transferCertificate.declared ? ' (Offline)' : '')],
+      ['Previous Marksheet', (docs.marksheet ? docs.marksheet.status : 'Pending') + (docs.marksheet && docs.marksheet.declared ? ' (Offline)' : '')]
+    ]}
+  ];
+
+  var html = '' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px;padding:12px;background:#f8fafc;border-radius:5px;border:1px solid #e2e8f0;">' +
+      '<div><strong>Application Number:</strong> ' + (data.applicationNumber || 'Will be auto-generated') + '</div>' +
+      '<div><strong>Academic Session:</strong> ' + getCurrentSession() + '</div>' +
+      '<div><strong>Admission Date:</strong> ' + formatDate(s.admissionDate) + '</div>' +
+    '</div>';
+
+  reviewSections.forEach(function(section) {
+    html += '<div style="margin-bottom:16px;">';
+    html += '<h4 style="margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;">' + section.title + '</h4>';
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;font-size:13px;">';
+    section.fields.forEach(function(field) {
+      html += '<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid #f1f5f9;"><span style="color:#64748b;min-width:120px;">' + field[0] + ':</span><span style="font-weight:500;">' + field[1] + '</span></div>';
+    });
+    html += '</div>';
+    html += '</div>';
+  });
+
+  // Add photo preview
+  if (photoUrl) {
+    html += '<div style="margin-top:8px;"><img src="' + photoUrl + '" style="width:60px;height:60px;border-radius:50%;object-fit:cover;border:2px solid #e2e8f0;" /></div>';
+  }
+
+  return html;
+}
+
+// ---- STEP 7: Submit ----
+function renderStep7(data) {
+  var s = data.student || {};
+  var p = data.parent || {};
+  var a = data.address || {};
+  var prv = data.previous || {};
+  var docs = data.documents || {};
+
+  var photoStatus = docs.photo ? docs.photo.status : 'Pending';
+
+  // Validate all required fields for submission
+  var missingFields = [];
+  if (!s.name) missingFields.push('Student Name');
+  if (!s.dob) missingFields.push('Date of Birth');
+  if (!s.gender) missingFields.push('Gender');
+  if (!s.class) missingFields.push('Class');
+  if (!p.fatherName) missingFields.push('Father\'s Name');
+  if (!p.motherName) missingFields.push('Mother\'s Name');
+  if (!p.contact) missingFields.push('Contact Number');
+  if (!a.present) missingFields.push('Present Address');
+  if (!a.village) missingFields.push('Village/Town');
+  if (!a.district) missingFields.push('District');
+  if (!a.state) missingFields.push('State');
+  if (!a.pinCode) missingFields.push('PIN Code');
+  if (!a.emergencyContact) missingFields.push('Emergency Contact');
+  if (photoStatus !== 'Uploaded') missingFields.push('Passport Photo (must be uploaded)');
+
+  var hasMissing = missingFields.length > 0;
+
+  var html = '' +
+    '<div style="text-align:center;margin-bottom:20px;">' +
+      '<div style="font-size:48px;color:#dc3545;margin-bottom:12px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:48px;height:48px;"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>' +
+      '<h2 style="margin:0 0 4px;">Ready to Submit</h2>' +
+      '<p style="margin:0;color:#64748b;">Please verify all information before final submission.</p>' +
+    '</div>';
+
+  if (hasMissing) {
+    html += '<div style="padding:12px;background:#fde8ea;border-radius:5px;border:1px solid #fecaca;color:#b02a37;margin-bottom:16px;">';
+    html += '<strong>Missing required fields:</strong><ul style="margin:8px 0 0 20px;">';
+    missingFields.forEach(function(field) {
+      html += '<li>' + field + '</li>';
+    });
+    html += '</ul></div>';
+  } else {
+    html += '<div style="padding:12px;background:#e6f4ea;border-radius:5px;border:1px solid #b7e4c7;color:#1e7e34;margin-bottom:16px;">';
+    html += '<strong>All required fields are completed.</strong> Click "Submit Admission" to finalize.';
+    html += '</div>';
+  }
+
+  // Show summary
+  html += '<div style="background:#f8fafc;padding:12px;border-radius:5px;border:1px solid #e2e8f0;font-size:13px;">';
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 20px;">';
+  html += '<div><strong>Student:</strong> ' + (s.name || '—') + '</div>';
+  html += '<div><strong>Class:</strong> ' + (s.class || '—') + '</div>';
+  html += '<div><strong>Father:</strong> ' + (p.fatherName || '—') + '</div>';
+  html += '<div><strong>Mother:</strong> ' + (p.motherName || '—') + '</div>';
+  html += '<div><strong>Contact:</strong> ' + (p.contact || '—') + '</div>';
+  html += '<div><strong>Photo:</strong> ' + photoStatus + '</div>';
+  html += '</div></div>';
+
+  return html;
+}
+
+// ---- Navigation ----
+window.admissionModule.goToStep = function(step) {
+  // Save current step data before moving
+  var saved = collectStepData();
+  if (saved) {
+    stepData = saved;
+  }
+
+  // Validate before moving forward
+  if (step > getCurrentStep()) {
+    var validation = validateStep(getCurrentStep(), stepData);
+    if (!validation.valid) {
+      showValidationError(validation.message);
+      return;
+    }
+  }
+
+  showStep(step, stepData);
+};
+
+function getCurrentStep() {
+  // Determine current step from the visible modal
+  var body = document.getElementById('step-modal-body');
+  if (!body) return 1;
+  // Check which step content is visible
+  // We'll track it in a global
+  return window._admissionStep || 1;
+}
+
+function collectStepData() {
+  var data = JSON.parse(JSON.stringify(stepData || {}));
+
+  // Step 1
+  var s1Name = document.getElementById('s1-name');
+  var s1Dob = document.getElementById('s1-dob');
+  var s1Gender = document.getElementById('s1-gender');
+  var s1Aadhaar = document.getElementById('s1-aadhaar');
+  var s1Class = document.getElementById('s1-class');
+  var s1Section = document.getElementById('s1-section');
+  var s1AdmissionDate = document.getElementById('s1-admission-date');
+
+  if (s1Name) {
+    data.student = data.student || {};
+    data.student.name = s1Name.value.trim();
+    data.student.dob = s1Dob ? s1Dob.value : '';
+    data.student.gender = s1Gender ? s1Gender.value : '';
+    data.student.aadhaar = s1Aadhaar ? s1Aadhaar.value.trim() : '';
+    data.student.class = s1Class ? s1Class.value : '';
+    data.student.section = s1Section ? s1Section.value : '';
+    data.student.admissionDate = s1AdmissionDate ? s1AdmissionDate.value : '';
+  }
+
+  // Step 2
+  var s2Father = document.getElementById('s2-father');
+  var s2Mother = document.getElementById('s2-mother');
+  var s2GuardianName = document.getElementById('s2-guardian-name');
+  var s2GuardianRelation = document.getElementById('s2-guardian-relation');
+  var s2Contact = document.getElementById('s2-contact');
+  var s2Email = document.getElementById('s2-email');
+
+  if (s2Father) {
+    data.parent = data.parent || {};
+    data.parent.fatherName = s2Father.value.trim();
+    data.parent.motherName = s2Mother ? s2Mother.value.trim() : '';
+    data.parent.guardianName = s2GuardianName ? s2GuardianName.value.trim() : '';
+    data.parent.guardianRelation = s2GuardianRelation ? s2GuardianRelation.value.trim() : '';
+    data.parent.contact = s2Contact ? s2Contact.value.trim() : '';
+    data.parent.email = s2Email ? s2Email.value.trim() : '';
+  }
+
+  // Step 3
+  var s3Present = document.getElementById('s3-present');
+  var s3Permanent = document.getElementById('s3-permanent');
+  var s3Village = document.getElementById('s3-village');
+  var s3District = document.getElementById('s3-district');
+  var s3State = document.getElementById('s3-state');
+  var s3Pin = document.getElementById('s3-pin');
+  var s3Emergency = document.getElementById('s3-emergency');
+
+  if (s3Present) {
+    data.address = data.address || {};
+    data.address.present = s3Present.value.trim();
+    data.address.permanent = s3Permanent ? s3Permanent.value.trim() : '';
+    data.address.village = s3Village ? s3Village.value.trim() : '';
+    data.address.district = s3District ? s3District.value.trim() : '';
+    data.address.state = s3State ? s3State.value.trim() : '';
+    data.address.pinCode = s3Pin ? s3Pin.value.trim() : '';
+    data.address.emergencyContact = s3Emergency ? s3Emergency.value.trim() : '';
+  }
+
+  // Step 4
+  var s4School = document.getElementById('s4-school');
+  var s4Class = document.getElementById('s4-class');
+  var s4Board = document.getElementById('s4-board');
+  var s4Roll = document.getElementById('s4-roll');
+
+  if (s4School) {
+    data.previous = data.previous || {};
+    data.previous.school = s4School.value.trim();
+    data.previous.class = s4Class ? s4Class.value.trim() : '';
+    data.previous.board = s4Board ? s4Board.value.trim() : '';
+    data.previous.rollNumber = s4Roll ? s4Roll.value.trim() : '';
+  }
+
+  // Step 5 – documents are handled separately via the offline checkbox
+  // But we preserve existing doc statuses
+
+  return data;
+}
+
+function validateStep(step, data) {
+  var s = data.student || {};
+  var p = data.parent || {};
+  var a = data.address || {};
+  var docs = data.documents || {};
+  var photoStatus = docs.photo ? docs.photo.status : 'Pending';
+
+  switch(step) {
+    case 1:
+      if (!s.name) return { valid: false, message: 'Student Name is required.' };
+      if (!s.dob) return { valid: false, message: 'Date of Birth is required.' };
+      if (!s.gender) return { valid: false, message: 'Gender is required.' };
+      if (!s.class) return { valid: false, message: 'Class is required.' };
+      return { valid: true };
+    case 2:
+      if (!p.fatherName) return { valid: false, message: 'Father\'s Name is required.' };
+      if (!p.motherName) return { valid: false, message: 'Mother\'s Name is required.' };
+      if (!p.contact || p.contact.length < 10) return { valid: false, message: 'Valid 10-digit contact number is required.' };
+      return { valid: true };
+    case 3:
+      if (!a.present) return { valid: false, message: 'Present Address is required.' };
+      if (!a.village) return { valid: false, message: 'Village/Town is required.' };
+      if (!a.district) return { valid: false, message: 'District is required.' };
+      if (!a.state) return { valid: false, message: 'State is required.' };
+      if (!a.pinCode || a.pinCode.length < 6) return { valid: false, message: 'Valid 6-digit PIN Code is required.' };
+      if (!a.emergencyContact || a.emergencyContact.length < 10) return { valid: false, message: 'Valid 10-digit Emergency Contact is required.' };
+      return { valid: true };
+    case 5:
+      // Photo must be uploaded
+      var offlineDeclared = docs.offlineDeclared || false;
+      if (photoStatus !== 'Uploaded') {
+        return { valid: false, message: 'Passport photo is mandatory. Please upload a photo.' };
+      }
+      return { valid: true };
+    case 6:
+      // All required fields from previous steps must be valid
+      var v1 = validateStep(1, data);
+      if (!v1.valid) return v1;
+      var v2 = validateStep(2, data);
+      if (!v2.valid) return v2;
+      var v3 = validateStep(3, data);
+      if (!v3.valid) return v3;
+      var v5 = validateStep(5, data);
+      if (!v5.valid) return v5;
+      return { valid: true };
+    default:
+      return { valid: true };
+  }
+}
+
+function showValidationError(message) {
+  // Use the existing validation modal/center
+  var body = document.getElementById('step-modal-body');
+  if (body) {
+    var existing = document.getElementById('validation-error');
+    if (existing) existing.remove();
+
+    var div = document.createElement('div');
+    div.id = 'validation-error';
+    div.style.cssText = 'padding:12px;background:#fde8ea;border-radius:5px;border:1px solid #fecaca;color:#b02a37;margin-bottom:16px;text-align:center;';
+    div.innerHTML = '<strong>' + message + '</strong>';
+    body.prepend(div);
+
+    // Auto-hide after 4 seconds
+    setTimeout(function() {
+      if (div.parentNode) div.remove();
+    }, 4000);
+  } else {
+    window.showToast(message, 'error');
+  }
+}
+
+// ---- Document Upload Functions ----
+window.admissionModule.uploadPhoto = function() {
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/jpeg,image/png';
+  input.onchange = function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+
+    // Validate size (500 KB max)
+    if (file.size > 500 * 1024) {
+      window.showToast('File size exceeds 500 KB limit.', 'error');
+      return;
+    }
+
+    // Show uploading status
+    var statusEl = document.getElementById('photo-upload-status');
+    if (statusEl) {
+      statusEl.innerHTML = 'Uploading to cloud... <span class="spinner" style="display:inline-block;width:14px;height:14px;border-width:2px;margin-left:8px;"></span>';
+      statusEl.style.color = '#1e293b';
+    }
+
+    // Read and convert to base64 (simple preview)
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      var preview = document.querySelector('#step-modal-body img');
+      if (preview) {
+        preview.src = ev.target.result;
+      } else {
+        // Add preview
+        var container = document.querySelector('#step-modal-body .photo-upload-preview');
+        if (container) {
+          container.innerHTML = '<img src="' + ev.target.result + '" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #e2e8f0;" />';
+        }
+      }
+
+      // Store in stepData
+      stepData.documents = stepData.documents || {};
+      stepData.documents.photo = {
+        status: 'Uploaded',
+        url: ev.target.result,
+        fileName: file.name,
+        fileSize: file.size
+      };
+
+      if (statusEl) {
+        statusEl.innerHTML = '✓ Uploaded successfully';
+        statusEl.style.color = '#1e7e34';
+      }
+
+      // Update status badge
+      var statusBadge = document.querySelector('#step-modal-body .photo-status');
+      if (statusBadge) {
+        statusBadge.innerHTML = '<span class="badge green">Uploaded</span>';
+      }
+
+      window.showToast('Photo uploaded successfully.', 'success');
+    };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+};
+
+window.admissionModule.removePhoto = function() {
+  if (confirm('Remove the uploaded photo?')) {
+    stepData.documents = stepData.documents || {};
+    stepData.documents.photo = { status: 'Pending' };
+
+    var img = document.querySelector('#step-modal-body img');
+    if (img) {
+      img.src = '';
+      img.style.display = 'none';
+    }
+
+    var statusEl = document.getElementById('photo-upload-status');
+    if (statusEl) {
+      statusEl.innerHTML = 'Photo removed. Please upload a new one.';
+      statusEl.style.color = '#dc3545';
+    }
+
+    window.showToast('Photo removed.', 'info');
+  }
+};
+
+window.admissionModule.toggleOfflineDeclaration = function(checked) {
+  stepData.documents = stepData.documents || {};
+  stepData.documents.offlineDeclared = checked;
+
+  if (checked) {
+    // Mark all non-photo documents as "Offline Declaration"
+    var docTypes = ['aadhaar', 'birthCertificate', 'transferCertificate', 'marksheet'];
+    docTypes.forEach(function(type) {
+      if (!stepData.documents[type]) {
+        stepData.documents[type] = {};
+      }
+      stepData.documents[type].status = 'Offline Declaration';
+      stepData.documents[type].declared = true;
+    });
+
+    window.showToast('Offline declaration enabled for documents.', 'info');
+
+    // Update UI statuses
+    var statusElements = document.querySelectorAll('#step-modal-body .doc-status');
+    // We'll let the next render handle UI updates
+
+    // Re-render the step to show updated statuses
+    var step = 5;
+    var body = document.getElementById('step-modal-body');
+    if (body) {
+      var content = body.querySelector('#step-content');
+      if (content) {
+        content.innerHTML = renderStepContent(step, stepData);
+        // Re-bind the checkbox event
+        var checkbox = document.getElementById('s5-offline-declaration');
+        if (checkbox) {
+          checkbox.checked = true;
+        }
+      }
+    }
+  } else {
+    // Reset to Pending for non-photo docs (if they were offline declared)
+    var docTypes = ['aadhaar', 'birthCertificate', 'transferCertificate', 'marksheet'];
+    docTypes.forEach(function(type) {
+      if (stepData.documents[type] && stepData.documents[type].declared) {
+        stepData.documents[type].status = 'Pending';
+        stepData.documents[type].declared = false;
+      }
+    });
+    window.showToast('Offline declaration disabled.', 'info');
+
+    // Re-render
+    var step = 5;
+    var body = document.getElementById('step-modal-body');
+    if (body) {
+      var content = body.querySelector('#step-content');
+      if (content) {
+        content.innerHTML = renderStepContent(step, stepData);
+      }
+    }
+  }
+};
+
+// ---- Submit Admission ----
+window.admissionModule.submitAdmission = function() {
+  // Collect final data
+  var data = collectStepData();
+
+  // Validate all steps
+  var v1 = validateStep(1, data);
+  if (!v1.valid) { showValidationError(v1.message); return; }
+  var v2 = validateStep(2, data);
+  if (!v2.valid) { showValidationError(v2.message); return; }
+  var v3 = validateStep(3, data);
+  if (!v3.valid) { showValidationError(v3.message); return; }
+  var v5 = validateStep(5, data);
+  if (!v5.valid) { showValidationError(v5.message); return; }
+
+  var docs = data.documents || {};
+  var photoStatus = docs.photo ? docs.photo.status : 'Pending';
+  if (photoStatus !== 'Uploaded') {
+    showValidationError('Passport photo must be uploaded before submission.');
+    return;
+  }
+
+  // Prepare final submission data
+  var now = Date.now();
+  var submissionData = {
+    student: data.student || {},
+    parent: data.parent || {},
+    address: data.address || {},
+    previous: data.previous || {},
+    documents: data.documents || {},
+    status: 'Submitted',
+    submittedAt: now,
+    updatedAt: now
+  };
+
+  // Add session
+  submissionData.academicSession = getCurrentSession();
+
+  // If editing, update existing
+  if (currentEditId) {
+    db.ref(ADMISSIONS_PATH + '/' + currentEditId).update(submissionData)
+      .then(function() {
+        // Also update students node if studentId exists
+        var item = allAdmissions.find(function(a) { return a.id === currentEditId; });
+        if (item && item.studentId) {
+          var studentData = {
+            studentId: item.studentId,
+            admissionId: currentEditId,
+            name: data.student.name,
+            class: data.student.class,
+            section: data.student.section,
+            rollNumber: item.rollNumber || '',
+            admissionNumber: item.admissionNumber || '',
+            status: 'Active',
+            updatedAt: now
+          };
+          db.ref(STUDENTS_PATH + '/' + item.studentId).update(studentData);
+        }
+        window.closeModal();
+        window.showToast('Admission updated successfully.', 'success');
+        loadAdmissions();
+      })
+      .catch(function(error) {
+        window.showToast('Error submitting: ' + error.message, 'error');
+      });
+    return;
+  }
+
+  // New admission – generate IDs
+  // 1. Get application counter
+  getNextCounter('applicationCounter', 1).then(function(appCounter) {
+    var applicationNumber = generateApplicationNumber(appCounter);
+
+    // 2. Get admission counter
+    getNextCounter('admissionCounter', 1).then(function(admCounter) {
+      var admissionNumber = generateAdmissionNumber(admCounter);
+
+      // 3. Get roll counter for class+section
+      var classVal = data.student.class || 'NA';
+      var sectionVal = data.student.section || 'NA';
+      var counterKey = getCounterKey(classVal, sectionVal);
+
+      getNextCounter('rollCounters/' + counterKey, 1).then(function(rollCounter) {
+        var rollNumber = generateRollNumber(classVal, sectionVal, rollCounter);
+
+        // Create the admission record
+        var admissionId = db.ref(ADMISSIONS_PATH).push().key;
+        var studentId = db.ref(STUDENTS_PATH).push().key;
+
+        var finalData = {
+          applicationNumber: applicationNumber,
+          admissionNumber: admissionNumber,
+          rollNumber: rollNumber,
+          studentId: studentId,
+          status: 'Submitted',
+          submittedAt: now,
+          createdAt: now,
+          updatedAt: now,
+          academicSession: getCurrentSession(),
+          admissionDate: data.student.admissionDate || new Date().toISOString().split('T')[0]
+        };
+
+        // Merge with submission data
+        Object.assign(finalData, submissionData);
+
+        var updates = {};
+        updates[ADMISSIONS_PATH + '/' + admissionId] = finalData;
+        updates[STUDENTS_PATH + '/' + studentId] = {
+          studentId: studentId,
+          admissionId: admissionId,
+          name: data.student.name,
+          class: data.student.class,
+          section: data.student.section,
+          rollNumber: rollNumber,
+          admissionNumber: admissionNumber,
+          status: 'Active',
+          createdAt: now,
+          updatedAt: now
+        };
+
+        db.ref().update(updates)
+          .then(function() {
+            window.closeModal();
+            // Show success with generated IDs
+            var successHtml = '' +
+              '<div style="text-align:center;padding:20px;">' +
+                '<div style="width:64px;height:64px;border-radius:50%;background:#e6f4ea;color:#28a745;display:grid;place-items:center;margin:0 auto 16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:32px;height:32px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>' +
+                '<h2 style="margin:0 0 4px;">Admission Successful</h2>' +
+                '<p style="margin:0 0 16px;color:#64748b;">The admission application has been submitted successfully.</p>' +
+                '<div style="background:#f8fafc;padding:16px;border-radius:5px;border:1px solid #e2e8f0;display:inline-block;text-align:left;">' +
+                  '<div><strong>Application Number:</strong> ' + applicationNumber + '</div>' +
+                  '<div><strong>Admission Number:</strong> ' + admissionNumber + '</div>' +
+                  '<div><strong>Roll Number:</strong> ' + rollNumber + '</div>' +
+                  '<div><strong>Student:</strong> ' + data.student.name + '</div>' +
+                  '<div><strong>Class:</strong> ' + data.student.class + (data.student.section && data.student.section !== 'NA' ? ' - ' + data.student.section : '') + '</div>' +
+                '</div>' +
+                '<div style="margin-top:16px;"><button class="btn btn-primary" onclick="window.closeModal();window.admissionModule.downloadPDF(\'' + admissionId + '\')">Download PDF Receipt</button></div>' +
+              '</div>';
+
+            window.openModal('Admission Confirmed', successHtml, '<button class="btn btn-outline" onclick="window.closeModal();location.reload();">Close</button>', false);
+
+            window.showToast('Admission completed for ' + data.student.name + '.', 'success');
+            loadAdmissions();
+          })
+          .catch(function(error) {
+            window.showToast('Error saving admission: ' + error.message, 'error');
+          });
+      });
+    });
+  });
+};
+
+// ---- PDF Download (upgraded) ----
 function downloadPDF(id) {
   var item = allAdmissions.find(function(a) { return a.id === id; });
   if (!item) {
     window.showToast('Record not found.', 'error');
     return;
   }
+
+  var s = item.student || {};
+  var p = item.parent || {};
+  var a = item.address || {};
+  var prv = item.previous || {};
+  var docs = item.documents || {};
+
+  var photoUrl = docs.photo ? docs.photo.url : '';
+
   var receiptDiv = document.createElement('div');
-  receiptDiv.className = 'receipt';
+  receiptDiv.className = 'receipt print-area';
   receiptDiv.style.cssText = 'padding:40px;max-width:780px;margin:0 auto;background:#fff;font-family:Inter,sans-serif;';
+
   receiptDiv.innerHTML = '' +
     '<div class="receipt-head">' +
       '<div class="receipt-brand">' +
         '<div class="logo" style="width:52px;height:52px;background:#dc3545;color:#fff;border-radius:5px;display:grid;place-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div>' +
         '<div><div class="school-name" style="font-size:20px;font-weight:800;">Janaki Professional Academy</div><div class="school-meta" style="font-size:12px;color:#64748b;">ERP · Admission Receipt</div></div>' +
       '</div>' +
-      '<div class="receipt-tag"><h3 style="margin:0;font-size:15px;text-transform:uppercase;letter-spacing:0.08em;color:#dc3545;">Admission Confirmed</h3><div class="r-num" style="font-size:12.5px;color:#64748b;">Token: ' + item.token + '</div></div>' +
+      '<div class="receipt-tag"><h3 style="margin:0;font-size:15px;text-transform:uppercase;letter-spacing:0.08em;color:#dc3545;">Admission Confirmed</h3><div class="r-num" style="font-size:12.5px;color:#64748b;">' + (item.applicationNumber || 'N/A') + '</div></div>' +
     '</div>' +
-    '<div class="receipt-section">' +
-      '<h4 style="margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;">Student Details</h4>' +
+    '<div style="display:flex;gap:16px;align-items:center;margin-bottom:16px;padding:12px;background:#f8fafc;border-radius:5px;border:1px solid #e2e8f0;">' +
+      (photoUrl ? '<img src="' + photoUrl + '" style="width:60px;height:60px;border-radius:50%;object-fit:cover;border:2px solid #e2e8f0;" />' : '') +
+      '<div><strong>' + s.name + '</strong><br><span style="color:#64748b;font-size:13px;">' + (s.class || 'N/A') + (s.section ? ' - ' + s.section : '') + '</span></div>' +
+    '</div>' +
+    '<div class="receipt-section"><h4 style="margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;">Admission Details</h4>' +
       '<div class="receipt-info-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px 24px;font-size:13px;">' +
-        '<div><span class="k" style="color:#64748b;min-width:100px;">Name</span><span class="v" style="font-weight:600;">' + item.name + '</span></div>' +
-        '<div><span class="k" style="color:#64748b;min-width:100px;">Class</span><span class="v" style="font-weight:600;">' + item.class + '</span></div>' +
-        '<div><span class="k" style="color:#64748b;min-width:100px;">Roll Number</span><span class="v" style="font-weight:600;">' + item.roll + '</span></div>' +
-        '<div><span class="k" style="color:#64748b;min-width:100px;">Status</span><span class="v" style="font-weight:600;">' + item.status + '</span></div>' +
-        '<div><span class="k" style="color:#64748b;min-width:100px;">Date</span><span class="v" style="font-weight:600;">' + item.date + '</span></div>' +
+        '<div><span class="k" style="color:#64748b;min-width:120px;">Admission Number</span><span class="v" style="font-weight:600;">' + (item.admissionNumber || '—') + '</span></div>' +
+        '<div><span class="k" style="color:#64748b;min-width:120px;">Roll Number</span><span class="v" style="font-weight:600;">' + (item.rollNumber || '—') + '</span></div>' +
+        '<div><span class="k" style="color:#64748b;min-width:120px;">Academic Session</span><span class="v" style="font-weight:600;">' + (item.academicSession || 'N/A') + '</span></div>' +
+        '<div><span class="k" style="color:#64748b;min-width:120px;">Date</span><span class="v" style="font-weight:600;">' + formatDate(s.admissionDate) + '</span></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="receipt-section"><h4 style="margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;">Student Information</h4>' +
+      '<div class="receipt-info-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px 24px;font-size:13px;">' +
+        '<div><span class="k" style="color:#64748b;min-width:120px;">Name</span><span class="v" style="font-weight:600;">' + s.name + '</span></div>' +
+        '<div><span class="k" style="color:#64748b;min-width:120px;">Date of Birth</span><span class="v" style="font-weight:600;">' + formatDate(s.dob) + '</span></div>' +
+        '<div><span class="k" style="color:#64748b;min-width:120px;">Gender</span><span class="v" style="font-weight:600;">' + (s.gender || 'N/A') + '</span></div>' +
+        '<div><span class="k" style="color:#64748b;min-width:120px;">Aadhaar</span><span class="v" style="font-weight:600;">' + (s.aadhaar || 'N/A') + '</span></div>' +
+        '<div><span class="k" style="color:#64748b;min-width:120px;">Class</span><span class="v" style="font-weight:600;">' + (s.class || 'N/A') + '</span></div>' +
+        '<div><span class="k" style="color:#64748b;min-width:120px;">Section</span><span class="v" style="font-weight:600;">' + (s.section || 'N/A') + '</span></div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="receipt-section"><h4 style="margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;">Parent / Guardian</h4>' +
+      '<div class="receipt-info-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px 24px;font-size:13px;">' +
+        '<div><span class="k" style="color:#64748b;min-width:120px;">Father</span><span class="v" style="font-weight:600;">' + (p.fatherName || 'N/A') + '</span></div>' +
+        '<div><span class="k" style="color:#64748b;min-width:120px;">Mother</span><span class="v" style="font-weight:600;">' + (p.motherName || 'N/A') + '</span></div>' +
+        (p.guardianName ? '<div><span class="k" style="color:#64748b;min-width:120px;">Guardian</span><span class="v" style="font-weight:600;">' + p.guardianName + (p.guardianRelation ? ' (' + p.guardianRelation + ')' : '') + '</span></div>' : '') +
+        '<div><span class="k" style="color:#64748b;min-width:120px;">Contact</span><span class="v" style="font-weight:600;">' + (p.contact || 'N/A') + '</span></div>' +
       '</div>' +
     '</div>' +
     '<div style="margin:20px 0;text-align:center;">' +
-      '<div id="qr-code-container" style="display:inline-block;padding:10px;border:1px solid #e2e8f0;border-radius:5px;"></div>' +
+      '<div id="qr-code-container-pdf" style="display:inline-block;padding:10px;border:1px solid #e2e8f0;border-radius:5px;"></div>' +
       '<div style="font-size:11px;color:#94a3b8;margin-top:6px;">Scan to verify authenticity</div>' +
     '</div>' +
     '<div class="receipt-foot" style="margin-top:40px;display:flex;justify-content:space-between;align-items:flex-end;font-size:12px;color:#64748b;">' +
@@ -243,8 +1252,11 @@ function downloadPDF(id) {
 
   document.body.appendChild(receiptDiv);
 
-  var qrContainer = document.getElementById('qr-code-container');
-  var verifyUrl = window.location.origin + '/verify.html?token=' + item.token;
+  // Generate QR code
+  var token = item.token || generateToken();
+  var qrContainer = document.getElementById('qr-code-container-pdf');
+  var verifyUrl = window.location.origin + '/verify.html?token=' + token;
+
   if (typeof QRCode !== 'undefined') {
     new QRCode(qrContainer, {
       text: verifyUrl,
@@ -268,7 +1280,7 @@ function downloadPDF(id) {
     var pdfWidth = pdf.internal.pageSize.getWidth();
     var pdfHeight = (canvas.height * pdfWidth) / canvas.width;
     pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save('Admission_' + item.name + '_' + item.token + '.pdf');
+    pdf.save('Admission_' + (s.name || 'student') + '_' + (item.applicationNumber || '') + '.pdf');
     document.body.removeChild(receiptDiv);
   }).catch(function(error) {
     console.error('PDF generation error:', error);
@@ -277,13 +1289,20 @@ function downloadPDF(id) {
   });
 }
 
+// ---- Export ----
 window.admissionModule = {
   render: render,
-  openAddModal: openAddModal,
-  openEditModal: openEditModal,
+  openNewAdmission: openNewAdmission,
+  openEditAdmission: openEditAdmission,
+  viewAdmission: viewAdmission,
   deleteRecord: deleteRecord,
   filterTable: filterTable,
-  downloadPDF: downloadPDF
+  downloadPDF: downloadPDF,
+  uploadPhoto: window.admissionModule ? window.admissionModule.uploadPhoto : function() {},
+  removePhoto: window.admissionModule ? window.admissionModule.removePhoto : function() {},
+  toggleOfflineDeclaration: window.admissionModule ? window.admissionModule.toggleOfflineDeclaration : function() {},
+  goToStep: window.admissionModule ? window.admissionModule.goToStep : function() {},
+  submitAdmission: window.admissionModule ? window.admissionModule.submitAdmission : function() {}
 };
 
 export { render };
