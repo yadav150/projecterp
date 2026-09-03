@@ -16,7 +16,6 @@
     firebase.initializeApp(firebaseConfig);
   }
 
-  // Expose services
   window.db = firebase.firestore ? firebase.firestore() : null;
   window.auth = firebase.auth ? firebase.auth() : null;
 })();
