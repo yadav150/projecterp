@@ -7,7 +7,6 @@
   var crumbs = document.getElementById('crumbs');
   var logoutBtn = document.getElementById('logout-btn');
 
-  // Show logout button when authenticated
   if (typeof firebase !== 'undefined' && firebase.auth) {
     firebase.auth().onAuthStateChanged(function(user) {
       if (user && logoutBtn) {
@@ -16,7 +15,6 @@
     });
   }
 
-  // Global logout
   window.logout = function() {
     if (firebase.auth) {
       firebase.auth().signOut().then(function() {
@@ -28,7 +26,6 @@
     }
   };
 
-  // ---- Global Toast ----
   window.showToast = function(message, type) {
     type = type || 'info';
     var root = document.getElementById('toast-root');
@@ -63,7 +60,6 @@
     }, 4500);
   };
 
-  // ---- Global Modal ----
   window.openModal = function(title, bodyHtml, footerHtml, large) {
     var root = document.getElementById('modal-root');
     if (!root) return;
@@ -96,7 +92,6 @@
     if (root) root.innerHTML = '';
   };
 
-  // ---- Router ----
   function navigate(route) {
     var page = route || 'dashboard';
 
@@ -149,7 +144,6 @@
     }
   }
 
-  // ---- Page Renderers ----
   function renderDashboard() {
     var db = window.db;
     if (!db) {
@@ -170,7 +164,6 @@
       '</div>' +
       '<div class="card"><div class="card-header"><div><div class="card-title">Recent Admissions</div><div class="card-subtitle">Latest enrolled students</div></div></div><div class="card-body"><div id="recent-admissions">Loading...</div></div></div>';
 
-    // Load stats
     db.collection('admissions').get().then(function(snapshot) {
       var total = snapshot.size;
       var enrolled = 0;
@@ -183,12 +176,11 @@
       document.getElementById('stat-admissions').textContent = total;
       document.getElementById('stat-enrolled').textContent = enrolled;
       document.getElementById('stat-pending').textContent = pending;
-      document.getElementById('stat-students').textContent = total; // Assuming admissions = students for now
+      document.getElementById('stat-students').textContent = total;
     }).catch(function() {
       document.getElementById('stat-admissions').textContent = 'Error';
     });
 
-    // Load recent 5 admissions
     db.collection('admissions')
       .orderBy('createdAt', 'desc')
       .limit(5)
@@ -273,7 +265,6 @@
     pageContainer.innerHTML = '<div class="page-header"><div><h1 class="page-title">Administration</h1><p class="page-subtitle">System settings</p></div></div><div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 22v-4M4 4l2.5 2.5M20 20l-2.5-2.5M4 20l2.5-2.5M20 4l-2.5 2.5M2 12h4M22 12h-4"/><circle cx="12" cy="12" r="3"/></svg><div class="state-title">Coming Soon</div></div>';
   }
 
-  // ---- Navigation ----
   navItems.forEach(function(item) {
     item.addEventListener('click', function(e) {
       e.preventDefault();
@@ -290,7 +281,6 @@
     navigate(hash);
   });
 
-  // ---- Bootstrap ----
   document.addEventListener('DOMContentLoaded', function() {
     var initialRoute = window.location.hash.replace('#/', '') || 'dashboard';
     navigate(initialRoute);
