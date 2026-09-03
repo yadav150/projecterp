@@ -1,7 +1,5 @@
 // js/firebase-config.js
 (function() {
-  'use strict';
-
   var firebaseConfig = {
     apiKey: "AIzaSyB4GChSVJaGJOfrgFAtY8qd2TEZR1roA9U",
     authDomain: "janakiprofessionalacademy.firebaseapp.com",
@@ -11,11 +9,9 @@
     appId: "1:251032601039:web:4c6829d2591458f45a12ba",
     measurementId: "G-707JTX1XKM"
   };
-
   if (typeof firebase !== 'undefined' && !firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
   }
-
-  window.db = firebase.firestore ? firebase.firestore() : null;
+  window.db = firebase.database ? firebase.database() : null;
   window.auth = firebase.auth ? firebase.auth() : null;
 })();
