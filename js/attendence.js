@@ -4,12 +4,11 @@
 
   var db = window.db;
   if (!db) {
-    console.error('Firestore not available');
+    console.error('Realtime Database not available');
     return;
   }
 
-  var COLLECTION = 'attendance';
-
+  var PATH = 'attendance';
   var allData = [];
 
   function render(container) {
@@ -39,25 +38,21 @@
   }
 
   function loadData() {
-    db.collection(COLLECTION)
-      .orderBy('createdAt', 'desc')
-      .get()
-      .then(function(snapshot) {
-        allData = [];
-        snapshot.forEach(function(doc) {
-          var data = doc.data();
-          data.id = doc.id;
-          allData.push(data);
-        });
-        renderTableRows(allData);
-      })
-      .catch(function(error) {
-        console.error('Error loading attendance:', error);
-        var tbody = document.getElementById('attendance-body');
-        if (tbody) {
-          tbody.innerHTML = '<tr><td colspan="4"><div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Error loading data</div></div></td></tr>';
-        }
+    db.ref(PATH).once('value').then(function(snapshot) {
+      allData = [];
+      snapshot.forEach(function(child) {
+        var data = child.val();
+        data.id = child.key;
+        allData.push(data);
       });
+      renderTableRows(allData);
+    }).catch(function(error) {
+      console.error('Error loading attendance:', error);
+      var tbody = document.getElementById('attendance-body');
+      if (tbody) {
+        tbody.innerHTML = '<tr><td colspan="4"><div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Error loading data</div></div></td></tr>';
+      }
+    });
   }
 
   function renderTableRows(items) {
@@ -126,10 +121,10 @@
         studentName: studentName,
         date: date,
         status: status,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        createdAt: Date.now()
       };
 
-      db.collection(COLLECTION).add(data)
+      db.ref(PATH).push(data)
         .then(function() {
           window.closeModal();
           window.showToast('Attendance recorded successfully.', 'success');
@@ -171,7 +166,7 @@
         return;
       }
 
-      db.collection(COLLECTION).doc(id).update({
+      db.ref(PATH + '/' + id).update({
         studentName: studentName,
         date: date,
         status: status
@@ -192,7 +187,7 @@
     if (!item) return;
 
     if (confirm('Delete attendance record for ' + (item.studentName || 'this student') + '?')) {
-      db.collection(COLLECTION).doc(id).delete()
+      db.ref(PATH + '/' + id).remove()
         .then(function() {
           window.showToast('Attendance record deleted.', 'error');
           loadData();
