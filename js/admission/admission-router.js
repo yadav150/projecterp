@@ -1,6 +1,9 @@
 // js/admission/admission-router.js
 var db = window.db;
 
+// Initialize the module object early
+window.admissionModule = {};
+
 var ADMISSIONS_PATH = 'admissions';
 var STUDENTS_PATH = 'students';
 var COUNTERS_PATH = 'admissionCounters';
@@ -19,7 +22,6 @@ function getCurrentSession() {
   var now = new Date();
   var year = now.getFullYear();
   var month = now.getMonth() + 1;
-  // Academic year runs April-March
   var startYear = month >= 4 ? year : year - 1;
   var endYear = startYear + 1;
   return startYear + '-' + String(endYear).slice(-2);
@@ -36,7 +38,8 @@ function getStatusBadge(status) {
     'Uploaded': '<span class="badge green">Uploaded</span>',
     'Offline Declaration': '<span class="badge amber">Offline Declaration</span>',
     'Pending': '<span class="badge slate">Pending</span>',
-    'Submitted': '<span class="badge green">Submitted</span>'
+    'Submitted': '<span class="badge green">Submitted</span>',
+    'Draft': '<span class="badge amber">Draft</span>'
   };
   return map[status] || '<span class="badge slate">' + status + '</span>';
 }
@@ -97,15 +100,19 @@ function render(container) {
 
   container.innerHTML = html;
 
-  window.admissionModule = {
-    render: render,
-    openNewAdmission: openNewAdmission,
-    openEditAdmission: openEditAdmission,
-    viewAdmission: viewAdmission,
-    deleteRecord: deleteRecord,
-    filterTable: filterTable,
-    downloadPDF: downloadPDF
-  };
+  // Assign all module functions to the global object
+  window.admissionModule.render = render;
+  window.admissionModule.openNewAdmission = openNewAdmission;
+  window.admissionModule.openEditAdmission = openEditAdmission;
+  window.admissionModule.viewAdmission = viewAdmission;
+  window.admissionModule.deleteRecord = deleteRecord;
+  window.admissionModule.filterTable = filterTable;
+  window.admissionModule.downloadPDF = downloadPDF;
+  window.admissionModule.uploadPhoto = uploadPhoto;
+  window.admissionModule.removePhoto = removePhoto;
+  window.admissionModule.toggleOfflineDeclaration = toggleOfflineDeclaration;
+  window.admissionModule.goToStep = goToStep;
+  window.admissionModule.submitAdmission = submitAdmission;
 
   loadAdmissions();
 }
@@ -119,7 +126,6 @@ function loadAdmissions() {
       data.id = child.key;
       allAdmissions.push(data);
     });
-    // Sort by createdAt descending
     allAdmissions.sort(function(a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
     renderTableRows(allAdmissions);
   }).catch(function(error) {
@@ -269,7 +275,6 @@ function deleteRecord(id) {
   var item = allAdmissions.find(function(a) { return a.id === id; });
   if (!item) return;
   if (confirm('Are you sure you want to delete this admission record?')) {
-    // Also delete the associated student record if it exists
     var studentId = item.studentId;
     var updates = {};
     updates[ADMISSIONS_PATH + '/' + id] = null;
@@ -300,15 +305,6 @@ function openEditAdmission(id) {
     window.showToast('Record not found.', 'error');
     return;
   }
-  // Determine which step to start from based on saved data
-  var step = 1;
-  if (item.student) step = 2;
-  if (item.parent) step = 3;
-  if (item.address) step = 4;
-  if (item.previous) step = 5;
-  if (item.documents) step = 6;
-  if (item.status === 'Submitted') step = 7;
-  // But allow starting from step 1 for editing
   showStep(1, item);
 }
 
@@ -345,7 +341,6 @@ function showStep(step, existingData) {
     'Confirm and complete the admission'
   ];
 
-  // Build the step content
   var content = '';
 
   // Step indicators
@@ -388,7 +383,6 @@ function showStep(step, existingData) {
   content += '</div>';
 
   // Inject into modal
-  var footerHtml = '';
   var modalTitle = 'Admission Application' + (currentEditId ? ' (Edit)' : '') + ' — Step ' + step + ' of ' + totalSteps;
 
   var backdrop = document.createElement('div');
@@ -636,7 +630,6 @@ function renderStep6(data) {
     html += '</div>';
   });
 
-  // Add photo preview
   if (photoUrl) {
     html += '<div style="margin-top:8px;"><img src="' + photoUrl + '" style="width:60px;height:60px;border-radius:50%;object-fit:cover;border:2px solid #e2e8f0;" /></div>';
   }
@@ -654,7 +647,6 @@ function renderStep7(data) {
 
   var photoStatus = docs.photo ? docs.photo.status : 'Pending';
 
-  // Validate all required fields for submission
   var missingFields = [];
   if (!s.name) missingFields.push('Student Name');
   if (!s.dob) missingFields.push('Date of Birth');
@@ -693,7 +685,6 @@ function renderStep7(data) {
     html += '</div>';
   }
 
-  // Show summary
   html += '<div style="background:#f8fafc;padding:12px;border-radius:5px;border:1px solid #e2e8f0;font-size:13px;">';
   html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 20px;">';
   html += '<div><strong>Student:</strong> ' + (s.name || '—') + '</div>';
@@ -708,14 +699,12 @@ function renderStep7(data) {
 }
 
 // ---- Navigation ----
-window.admissionModule.goToStep = function(step) {
-  // Save current step data before moving
+function goToStep(step) {
   var saved = collectStepData();
   if (saved) {
     stepData = saved;
   }
 
-  // Validate before moving forward
   if (step > getCurrentStep()) {
     var validation = validateStep(getCurrentStep(), stepData);
     if (!validation.valid) {
@@ -725,21 +714,15 @@ window.admissionModule.goToStep = function(step) {
   }
 
   showStep(step, stepData);
-};
+}
 
 function getCurrentStep() {
-  // Determine current step from the visible modal
-  var body = document.getElementById('step-modal-body');
-  if (!body) return 1;
-  // Check which step content is visible
-  // We'll track it in a global
   return window._admissionStep || 1;
 }
 
 function collectStepData() {
   var data = JSON.parse(JSON.stringify(stepData || {}));
 
-  // Step 1
   var s1Name = document.getElementById('s1-name');
   var s1Dob = document.getElementById('s1-dob');
   var s1Gender = document.getElementById('s1-gender');
@@ -759,7 +742,6 @@ function collectStepData() {
     data.student.admissionDate = s1AdmissionDate ? s1AdmissionDate.value : '';
   }
 
-  // Step 2
   var s2Father = document.getElementById('s2-father');
   var s2Mother = document.getElementById('s2-mother');
   var s2GuardianName = document.getElementById('s2-guardian-name');
@@ -777,7 +759,6 @@ function collectStepData() {
     data.parent.email = s2Email ? s2Email.value.trim() : '';
   }
 
-  // Step 3
   var s3Present = document.getElementById('s3-present');
   var s3Permanent = document.getElementById('s3-permanent');
   var s3Village = document.getElementById('s3-village');
@@ -797,7 +778,6 @@ function collectStepData() {
     data.address.emergencyContact = s3Emergency ? s3Emergency.value.trim() : '';
   }
 
-  // Step 4
   var s4School = document.getElementById('s4-school');
   var s4Class = document.getElementById('s4-class');
   var s4Board = document.getElementById('s4-board');
@@ -810,9 +790,6 @@ function collectStepData() {
     data.previous.board = s4Board ? s4Board.value.trim() : '';
     data.previous.rollNumber = s4Roll ? s4Roll.value.trim() : '';
   }
-
-  // Step 5 – documents are handled separately via the offline checkbox
-  // But we preserve existing doc statuses
 
   return data;
 }
@@ -845,14 +822,11 @@ function validateStep(step, data) {
       if (!a.emergencyContact || a.emergencyContact.length < 10) return { valid: false, message: 'Valid 10-digit Emergency Contact is required.' };
       return { valid: true };
     case 5:
-      // Photo must be uploaded
-      var offlineDeclared = docs.offlineDeclared || false;
       if (photoStatus !== 'Uploaded') {
         return { valid: false, message: 'Passport photo is mandatory. Please upload a photo.' };
       }
       return { valid: true };
     case 6:
-      // All required fields from previous steps must be valid
       var v1 = validateStep(1, data);
       if (!v1.valid) return v1;
       var v2 = validateStep(2, data);
@@ -868,7 +842,6 @@ function validateStep(step, data) {
 }
 
 function showValidationError(message) {
-  // Use the existing validation modal/center
   var body = document.getElementById('step-modal-body');
   if (body) {
     var existing = document.getElementById('validation-error');
@@ -880,7 +853,6 @@ function showValidationError(message) {
     div.innerHTML = '<strong>' + message + '</strong>';
     body.prepend(div);
 
-    // Auto-hide after 4 seconds
     setTimeout(function() {
       if (div.parentNode) div.remove();
     }, 4000);
@@ -890,7 +862,7 @@ function showValidationError(message) {
 }
 
 // ---- Document Upload Functions ----
-window.admissionModule.uploadPhoto = function() {
+function uploadPhoto() {
   var input = document.createElement('input');
   input.type = 'file';
   input.accept = 'image/jpeg,image/png';
@@ -898,34 +870,29 @@ window.admissionModule.uploadPhoto = function() {
     var file = e.target.files[0];
     if (!file) return;
 
-    // Validate size (500 KB max)
     if (file.size > 500 * 1024) {
       window.showToast('File size exceeds 500 KB limit.', 'error');
       return;
     }
 
-    // Show uploading status
     var statusEl = document.getElementById('photo-upload-status');
     if (statusEl) {
       statusEl.innerHTML = 'Uploading to cloud... <span class="spinner" style="display:inline-block;width:14px;height:14px;border-width:2px;margin-left:8px;"></span>';
       statusEl.style.color = '#1e293b';
     }
 
-    // Read and convert to base64 (simple preview)
     var reader = new FileReader();
     reader.onload = function(ev) {
       var preview = document.querySelector('#step-modal-body img');
       if (preview) {
         preview.src = ev.target.result;
       } else {
-        // Add preview
         var container = document.querySelector('#step-modal-body .photo-upload-preview');
         if (container) {
           container.innerHTML = '<img src="' + ev.target.result + '" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #e2e8f0;" />';
         }
       }
 
-      // Store in stepData
       stepData.documents = stepData.documents || {};
       stepData.documents.photo = {
         status: 'Uploaded',
@@ -939,7 +906,6 @@ window.admissionModule.uploadPhoto = function() {
         statusEl.style.color = '#1e7e34';
       }
 
-      // Update status badge
       var statusBadge = document.querySelector('#step-modal-body .photo-status');
       if (statusBadge) {
         statusBadge.innerHTML = '<span class="badge green">Uploaded</span>';
@@ -950,9 +916,9 @@ window.admissionModule.uploadPhoto = function() {
     reader.readAsDataURL(file);
   };
   input.click();
-};
+}
 
-window.admissionModule.removePhoto = function() {
+function removePhoto() {
   if (confirm('Remove the uploaded photo?')) {
     stepData.documents = stepData.documents || {};
     stepData.documents.photo = { status: 'Pending' };
@@ -971,14 +937,13 @@ window.admissionModule.removePhoto = function() {
 
     window.showToast('Photo removed.', 'info');
   }
-};
+}
 
-window.admissionModule.toggleOfflineDeclaration = function(checked) {
+function toggleOfflineDeclaration(checked) {
   stepData.documents = stepData.documents || {};
   stepData.documents.offlineDeclared = checked;
 
   if (checked) {
-    // Mark all non-photo documents as "Offline Declaration"
     var docTypes = ['aadhaar', 'birthCertificate', 'transferCertificate', 'marksheet'];
     docTypes.forEach(function(type) {
       if (!stepData.documents[type]) {
@@ -987,21 +952,14 @@ window.admissionModule.toggleOfflineDeclaration = function(checked) {
       stepData.documents[type].status = 'Offline Declaration';
       stepData.documents[type].declared = true;
     });
-
     window.showToast('Offline declaration enabled for documents.', 'info');
 
-    // Update UI statuses
-    var statusElements = document.querySelectorAll('#step-modal-body .doc-status');
-    // We'll let the next render handle UI updates
-
-    // Re-render the step to show updated statuses
     var step = 5;
     var body = document.getElementById('step-modal-body');
     if (body) {
       var content = body.querySelector('#step-content');
       if (content) {
         content.innerHTML = renderStepContent(step, stepData);
-        // Re-bind the checkbox event
         var checkbox = document.getElementById('s5-offline-declaration');
         if (checkbox) {
           checkbox.checked = true;
@@ -1009,7 +967,6 @@ window.admissionModule.toggleOfflineDeclaration = function(checked) {
       }
     }
   } else {
-    // Reset to Pending for non-photo docs (if they were offline declared)
     var docTypes = ['aadhaar', 'birthCertificate', 'transferCertificate', 'marksheet'];
     docTypes.forEach(function(type) {
       if (stepData.documents[type] && stepData.documents[type].declared) {
@@ -1019,7 +976,6 @@ window.admissionModule.toggleOfflineDeclaration = function(checked) {
     });
     window.showToast('Offline declaration disabled.', 'info');
 
-    // Re-render
     var step = 5;
     var body = document.getElementById('step-modal-body');
     if (body) {
@@ -1029,14 +985,12 @@ window.admissionModule.toggleOfflineDeclaration = function(checked) {
       }
     }
   }
-};
+}
 
 // ---- Submit Admission ----
-window.admissionModule.submitAdmission = function() {
-  // Collect final data
+function submitAdmission() {
   var data = collectStepData();
 
-  // Validate all steps
   var v1 = validateStep(1, data);
   if (!v1.valid) { showValidationError(v1.message); return; }
   var v2 = validateStep(2, data);
@@ -1053,7 +1007,6 @@ window.admissionModule.submitAdmission = function() {
     return;
   }
 
-  // Prepare final submission data
   var now = Date.now();
   var submissionData = {
     student: data.student || {},
@@ -1066,14 +1019,11 @@ window.admissionModule.submitAdmission = function() {
     updatedAt: now
   };
 
-  // Add session
   submissionData.academicSession = getCurrentSession();
 
-  // If editing, update existing
   if (currentEditId) {
     db.ref(ADMISSIONS_PATH + '/' + currentEditId).update(submissionData)
       .then(function() {
-        // Also update students node if studentId exists
         var item = allAdmissions.find(function(a) { return a.id === currentEditId; });
         if (item && item.studentId) {
           var studentData = {
@@ -1099,16 +1049,13 @@ window.admissionModule.submitAdmission = function() {
     return;
   }
 
-  // New admission – generate IDs
-  // 1. Get application counter
+  // New admission
   getNextCounter('applicationCounter', 1).then(function(appCounter) {
     var applicationNumber = generateApplicationNumber(appCounter);
 
-    // 2. Get admission counter
     getNextCounter('admissionCounter', 1).then(function(admCounter) {
       var admissionNumber = generateAdmissionNumber(admCounter);
 
-      // 3. Get roll counter for class+section
       var classVal = data.student.class || 'NA';
       var sectionVal = data.student.section || 'NA';
       var counterKey = getCounterKey(classVal, sectionVal);
@@ -1116,7 +1063,6 @@ window.admissionModule.submitAdmission = function() {
       getNextCounter('rollCounters/' + counterKey, 1).then(function(rollCounter) {
         var rollNumber = generateRollNumber(classVal, sectionVal, rollCounter);
 
-        // Create the admission record
         var admissionId = db.ref(ADMISSIONS_PATH).push().key;
         var studentId = db.ref(STUDENTS_PATH).push().key;
 
@@ -1133,7 +1079,6 @@ window.admissionModule.submitAdmission = function() {
           admissionDate: data.student.admissionDate || new Date().toISOString().split('T')[0]
         };
 
-        // Merge with submission data
         Object.assign(finalData, submissionData);
 
         var updates = {};
@@ -1154,7 +1099,6 @@ window.admissionModule.submitAdmission = function() {
         db.ref().update(updates)
           .then(function() {
             window.closeModal();
-            // Show success with generated IDs
             var successHtml = '' +
               '<div style="text-align:center;padding:20px;">' +
                 '<div style="width:64px;height:64px;border-radius:50%;background:#e6f4ea;color:#28a745;display:grid;place-items:center;margin:0 auto 16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:32px;height:32px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>' +
@@ -1181,9 +1125,9 @@ window.admissionModule.submitAdmission = function() {
       });
     });
   });
-};
+}
 
-// ---- PDF Download (upgraded) ----
+// ---- PDF Download ----
 function downloadPDF(id) {
   var item = allAdmissions.find(function(a) { return a.id === id; });
   if (!item) {
@@ -1252,7 +1196,6 @@ function downloadPDF(id) {
 
   document.body.appendChild(receiptDiv);
 
-  // Generate QR code
   var token = item.token || generateToken();
   var qrContainer = document.getElementById('qr-code-container-pdf');
   var verifyUrl = window.location.origin + '/verify.html?token=' + token;
@@ -1290,19 +1233,4 @@ function downloadPDF(id) {
 }
 
 // ---- Export ----
-window.admissionModule = {
-  render: render,
-  openNewAdmission: openNewAdmission,
-  openEditAdmission: openEditAdmission,
-  viewAdmission: viewAdmission,
-  deleteRecord: deleteRecord,
-  filterTable: filterTable,
-  downloadPDF: downloadPDF,
-  uploadPhoto: window.admissionModule ? window.admissionModule.uploadPhoto : function() {},
-  removePhoto: window.admissionModule ? window.admissionModule.removePhoto : function() {},
-  toggleOfflineDeclaration: window.admissionModule ? window.admissionModule.toggleOfflineDeclaration : function() {},
-  goToStep: window.admissionModule ? window.admissionModule.goToStep : function() {},
-  submitAdmission: window.admissionModule ? window.admissionModule.submitAdmission : function() {}
-};
-
 export { render };
