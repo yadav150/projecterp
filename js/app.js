@@ -7,6 +7,7 @@
   var crumbs = document.getElementById('crumbs');
   var logoutBtn = document.getElementById('logout-btn');
 
+  // ---- Firebase Auth State ----
   if (typeof firebase !== 'undefined' && firebase.auth) {
     firebase.auth().onAuthStateChanged(function(user) {
       if (user && logoutBtn) {
@@ -15,6 +16,7 @@
     });
   }
 
+  // ---- Global Logout ----
   window.logout = function() {
     if (firebase.auth) {
       firebase.auth().signOut().then(function() {
@@ -26,6 +28,7 @@
     }
   };
 
+  // ---- Global Toast ----
   window.showToast = function(message, type) {
     type = type || 'info';
     var root = document.getElementById('toast-root');
@@ -60,6 +63,7 @@
     }, 4500);
   };
 
+  // ---- Global Modal ----
   window.openModal = function(title, bodyHtml, footerHtml, large) {
     var root = document.getElementById('modal-root');
     if (!root) return;
@@ -92,6 +96,7 @@
     if (root) root.innerHTML = '';
   };
 
+  // ---- Router ----
   function navigate(route) {
     var page = route || 'dashboard';
 
@@ -144,6 +149,7 @@
     }
   }
 
+  // ---- Dashboard (Firebase-powered) ----
   function renderDashboard() {
     var db = window.db;
     if (!db) {
@@ -164,6 +170,7 @@
       '</div>' +
       '<div class="card"><div class="card-header"><div><div class="card-title">Recent Admissions</div><div class="card-subtitle">Latest enrolled students</div></div></div><div class="card-body"><div id="recent-admissions">Loading...</div></div></div>';
 
+    // Load stats
     db.collection('admissions').get().then(function(snapshot) {
       var total = snapshot.size;
       var enrolled = 0;
@@ -181,6 +188,7 @@
       document.getElementById('stat-admissions').textContent = 'Error';
     });
 
+    // Load recent 5 admissions
     db.collection('admissions')
       .orderBy('createdAt', 'desc')
       .limit(5)
@@ -201,6 +209,7 @@
       });
   }
 
+  // ---- Students (Firebase) ----
   function renderStudents() {
     pageContainer.innerHTML = '' +
       '<div class="page-header"><div><h1 class="page-title">Students</h1><p class="page-subtitle">Manage all enrolled students</p></div><div class="page-actions"><button class="btn btn-primary" onclick="window.showToast(\'Student registration coming soon.\', \'info\')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Student</button></div></div>' +
@@ -225,6 +234,7 @@
     });
   }
 
+  // ---- Admission (lazy load) ----
   function renderAdmission() {
     if (typeof window.renderAdmissionModule === 'function') {
       window.renderAdmissionModule(pageContainer);
@@ -241,30 +251,79 @@
     }
   }
 
+  // ---- Teachers (lazy load) ----
   function renderTeachers() {
-    pageContainer.innerHTML = '<div class="page-header"><div><h1 class="page-title">Teachers</h1><p class="page-subtitle">Faculty management</p></div></div><div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><div class="state-title">Coming Soon</div></div>';
+    pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Teachers Module...</div></div>';
+    import('./teachers.js').then(function(module) {
+      if (module && typeof module.render === 'function') {
+        module.render(pageContainer);
+      }
+    }).catch(function() {
+      pageContainer.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Module not loaded</div></div>';
+    });
   }
 
+  // ---- Fees (lazy load) ----
   function renderFees() {
-    pageContainer.innerHTML = '<div class="page-header"><div><h1 class="page-title">Fee Management</h1><p class="page-subtitle">Track payments and dues</p></div></div><div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="3"/><path d="M6 10v.01M18 14v.01"/></svg><div class="state-title">In Development</div></div>';
+    pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Fee Module...</div></div>';
+    import('./fees.js').then(function(module) {
+      if (module && typeof module.render === 'function') {
+        module.render(pageContainer);
+      }
+    }).catch(function() {
+      pageContainer.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Module not loaded</div></div>';
+    });
   }
 
+  // ---- Salary (lazy load) ----
   function renderSalary() {
-    pageContainer.innerHTML = '<div class="page-header"><div><h1 class="page-title">Salary</h1><p class="page-subtitle">Staff payroll</p></div></div><div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg><div class="state-title">Pending</div></div>';
+    pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Salary Module...</div></div>';
+    import('./salary.js').then(function(module) {
+      if (module && typeof module.render === 'function') {
+        module.render(pageContainer);
+      }
+    }).catch(function() {
+      pageContainer.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Module not loaded</div></div>';
+    });
   }
 
+  // ---- Receipts (lazy load) ----
   function renderReceipts() {
-    pageContainer.innerHTML = '<div class="page-header"><div><h1 class="page-title">Receipts</h1><p class="page-subtitle">Transaction history</p></div></div><div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16l4-2 4 2 4-2 4 2V8z"/><line x1="8" y1="10" x2="16" y2="10"/><line x1="8" y1="14" x2="14" y2="14"/></svg><div class="state-title">No Receipts</div></div>';
+    pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Receipts Module...</div></div>';
+    import('./receipts.js').then(function(module) {
+      if (module && typeof module.render === 'function') {
+        module.render(pageContainer);
+      }
+    }).catch(function() {
+      pageContainer.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Module not loaded</div></div>';
+    });
   }
 
+  // ---- Attendance (lazy load) ----
   function renderAttendance() {
-    pageContainer.innerHTML = '<div class="page-header"><div><h1 class="page-title">Attendance</h1><p class="page-subtitle">Daily tracking</p></div></div><div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 22v-4M4 4l2.5 2.5M20 20l-2.5-2.5M4 20l2.5-2.5M20 4l-2.5 2.5M2 12h4M22 12h-4"/><circle cx="12" cy="12" r="3"/></svg><div class="state-title">In Progress</div></div>';
+    pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Attendance Module...</div></div>';
+    import('./attendance.js').then(function(module) {
+      if (module && typeof module.render === 'function') {
+        module.render(pageContainer);
+      }
+    }).catch(function() {
+      pageContainer.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Module not loaded</div></div>';
+    });
   }
 
+  // ---- Administration (lazy load) ----
   function renderAdministration() {
-    pageContainer.innerHTML = '<div class="page-header"><div><h1 class="page-title">Administration</h1><p class="page-subtitle">System settings</p></div></div><div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 22v-4M4 4l2.5 2.5M20 20l-2.5-2.5M4 20l2.5-2.5M20 4l-2.5 2.5M2 12h4M22 12h-4"/><circle cx="12" cy="12" r="3"/></svg><div class="state-title">Coming Soon</div></div>';
+    pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Administration Module...</div></div>';
+    import('./administration.js').then(function(module) {
+      if (module && typeof module.render === 'function') {
+        module.render(pageContainer);
+      }
+    }).catch(function() {
+      pageContainer.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Module not loaded</div></div>';
+    });
   }
 
+  // ---- Navigation Event Listeners ----
   navItems.forEach(function(item) {
     item.addEventListener('click', function(e) {
       e.preventDefault();
@@ -281,6 +340,7 @@
     navigate(hash);
   });
 
+  // ---- Bootstrap ----
   document.addEventListener('DOMContentLoaded', function() {
     var initialRoute = window.location.hash.replace('#/', '') || 'dashboard';
     navigate(initialRoute);
