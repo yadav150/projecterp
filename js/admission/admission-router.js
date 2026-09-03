@@ -1,12 +1,8 @@
 // js/admission/admission-router.js
 var db = window.db;
-if (!db) {
-  console.error('Realtime Database not available');
-  export { render };
-  return;
-}
 
 var ADMISSIONS_PATH = 'admissions';
+var allAdmissions = [];
 
 function generateToken() {
   return Math.random().toString(36).substring(2, 8) + '-' +
@@ -14,10 +10,12 @@ function generateToken() {
          Date.now().toString(36);
 }
 
-var allAdmissions = [];
-
 function render(container) {
   if (!container) return;
+  if (!db) {
+    container.innerHTML = '<div class="state"><svg viewBox="0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Database not available</div></div>';
+    return;
+  }
 
   var html = '' +
     '<div class="page-header">' +
@@ -45,6 +43,7 @@ function render(container) {
 }
 
 function loadAdmissions() {
+  if (!db) return;
   db.ref(ADMISSIONS_PATH).once('value').then(function(snapshot) {
     allAdmissions = [];
     snapshot.forEach(function(child) {
@@ -65,12 +64,10 @@ function loadAdmissions() {
 function renderTableRows(admissions) {
   var tbody = document.getElementById('admission-body');
   if (!tbody) return;
-
   if (!admissions || admissions.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6"><div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><div class="state-title">No admissions found</div></div></td></tr>';
     return;
   }
-
   var rows = '';
   admissions.forEach(function(item) {
     var statusBadge = item.status === 'Enrolled' ? '<span class="badge green">Enrolled</span>' : '<span class="badge amber">Pending</span>';
@@ -97,13 +94,11 @@ function filterTable() {
   var statusFilter = document.getElementById('admission-status-filter');
   var query = search ? search.value.toLowerCase() : '';
   var status = statusFilter ? statusFilter.value : '';
-
   var filtered = allAdmissions.filter(function(item) {
     var matchName = (item.name || '').toLowerCase().includes(query);
     var matchStatus = status === '' || item.status === status;
     return matchName && matchStatus;
   });
-
   renderTableRows(filtered);
 }
 
@@ -115,11 +110,9 @@ function openAddModal() {
       '<div class="form-row"><label>Roll Number <span class="req">*</span></label><input class="input" id="add-roll" placeholder="Enter roll number" /></div>' +
       '<div class="form-row"><label>Status</label><select class="select" id="add-status"><option value="Enrolled">Enrolled</option><option value="Pending">Pending</option></select></div>' +
     '</div>';
-
   var footerHtml = '' +
     '<button class="btn btn-outline" onclick="window.closeModal()">Cancel</button>' +
     '<button class="btn btn-primary" id="save-add-btn">Save Admission</button>';
-
   window.openModal('New Admission', bodyHtml, footerHtml, false);
 
   document.getElementById('save-add-btn').addEventListener('click', function() {
@@ -127,12 +120,10 @@ function openAddModal() {
     var cls = document.getElementById('add-class').value.trim();
     var roll = document.getElementById('add-roll').value.trim();
     var status = document.getElementById('add-status').value;
-
     if (!name || !cls || !roll) {
       window.showToast('Please fill in all required fields.', 'error');
       return;
     }
-
     var token = generateToken();
     var admissionData = {
       name: name,
@@ -143,7 +134,6 @@ function openAddModal() {
       date: new Date().toISOString().split('T')[0],
       createdAt: Date.now()
     };
-
     db.ref(ADMISSIONS_PATH).push(admissionData)
       .then(function() {
         window.closeModal();
@@ -162,7 +152,6 @@ function openEditModal(id) {
     window.showToast('Record not found.', 'error');
     return;
   }
-
   var bodyHtml = '' +
     '<div class="form-grid">' +
       '<div class="form-row"><label>Full Name <span class="req">*</span></label><input class="input" id="edit-name" value="' + (item.name || '') + '" /></div>' +
@@ -170,11 +159,9 @@ function openEditModal(id) {
       '<div class="form-row"><label>Roll Number <span class="req">*</span></label><input class="input" id="edit-roll" value="' + (item.roll || '') + '" /></div>' +
       '<div class="form-row"><label>Status</label><select class="select" id="edit-status"><option value="Enrolled"' + (item.status === 'Enrolled' ? ' selected' : '') + '>Enrolled</option><option value="Pending"' + (item.status === 'Pending' ? ' selected' : '') + '>Pending</option></select></div>' +
     '</div>';
-
   var footerHtml = '' +
     '<button class="btn btn-outline" onclick="window.closeModal()">Cancel</button>' +
     '<button class="btn btn-primary" id="save-edit-btn">Update Admission</button>';
-
   window.openModal('Edit Admission', bodyHtml, footerHtml, false);
 
   document.getElementById('save-edit-btn').addEventListener('click', function() {
@@ -182,12 +169,10 @@ function openEditModal(id) {
     var cls = document.getElementById('edit-class').value.trim();
     var roll = document.getElementById('edit-roll').value.trim();
     var status = document.getElementById('edit-status').value;
-
     if (!name || !cls || !roll) {
       window.showToast('Please fill in all required fields.', 'error');
       return;
     }
-
     db.ref(ADMISSIONS_PATH + '/' + id).update({
       name: name,
       class: cls,
@@ -208,7 +193,6 @@ function openEditModal(id) {
 function deleteRecord(id) {
   var item = allAdmissions.find(function(a) { return a.id === id; });
   if (!item) return;
-
   if (confirm('Are you sure you want to delete the admission record for ' + (item.name || 'this student') + '?')) {
     db.ref(ADMISSIONS_PATH + '/' + id).remove()
       .then(function() {
@@ -227,7 +211,6 @@ function downloadPDF(id) {
     window.showToast('Record not found.', 'error');
     return;
   }
-
   var receiptDiv = document.createElement('div');
   receiptDiv.className = 'receipt';
   receiptDiv.style.cssText = 'padding:40px;max-width:780px;margin:0 auto;background:#fff;font-family:Inter,sans-serif;';
