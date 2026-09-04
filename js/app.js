@@ -7,7 +7,6 @@
   var crumbs = document.getElementById('crumbs');
   var logoutBtn = document.getElementById('logout-btn');
 
-  // ---- Firebase Auth State ----
   if (typeof firebase !== 'undefined' && firebase.auth) {
     firebase.auth().onAuthStateChanged(function(user) {
       if (user && logoutBtn) {
@@ -16,7 +15,6 @@
     });
   }
 
-  // ---- Global Logout ----
   window.logout = function() {
     if (firebase.auth) {
       firebase.auth().signOut().then(function() {
@@ -28,30 +26,24 @@
     }
   };
 
-  // ---- Global Toast ----
   window.showToast = function(message, type) {
     type = type || 'info';
     var root = document.getElementById('toast-root');
     if (!root) return;
-
     var icons = {
       success: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
       error: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
       info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
     };
-
     var toast = document.createElement('div');
     toast.className = 'toast';
     if (type === 'success') toast.classList.add('success');
     if (type === 'error') toast.classList.add('error');
-
     toast.innerHTML = '' +
       '<span style="flex-shrink:0;">' + (icons[type] || icons.info) + '</span>' +
       '<div><div class="t-title">' + (type.charAt(0).toUpperCase() + type.slice(1)) + '</div><div class="t-msg">' + message + '</div></div>' +
       '<button class="modal-close" style="margin-left:auto;flex-shrink:0;" onclick="this.parentElement.remove()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>';
-
     root.appendChild(toast);
-
     setTimeout(function() {
       if (toast.parentNode) {
         toast.style.opacity = '0';
@@ -63,20 +55,16 @@
     }, 4500);
   };
 
-  // ---- Global Modal (kept for other uses, but admission form uses full page) ----
   window.openModal = function(title, bodyHtml, footerHtml, large) {
     var root = document.getElementById('modal-root');
     if (!root) return;
-
     var modalClass = 'modal';
     if (large) modalClass += ' large';
-
     var backdrop = document.createElement('div');
     backdrop.className = 'modal-backdrop';
     backdrop.addEventListener('click', function(e) {
       if (e.target === backdrop) window.closeModal();
     });
-
     backdrop.innerHTML = '' +
       '<div class="' + modalClass + '" role="dialog" aria-modal="true">' +
         '<div class="modal-head">' +
@@ -86,7 +74,6 @@
         '<div class="modal-body">' + bodyHtml + '</div>' +
         '<div class="modal-foot">' + (footerHtml || '<button class="btn btn-outline" onclick="window.closeModal()">Close</button>') + '</div>' +
       '</div>';
-
     root.innerHTML = '';
     root.appendChild(backdrop);
   };
@@ -99,8 +86,6 @@
   // ---- Router ----
   function navigate(route) {
     var page = route || 'dashboard';
-
-    // Update nav active state
     navItems.forEach(function(item) {
       item.classList.remove('active');
       var dataRoute = item.getAttribute('data-route');
@@ -108,62 +93,28 @@
         item.classList.add('active');
       }
     });
-
-    // Update breadcrumbs
     var label = page.charAt(0).toUpperCase() + page.slice(1);
     if (page === 'dashboard') label = 'Dashboard';
     crumbs.innerHTML = '<span>Home</span><span class="sep">/</span><span class="crumb-current">' + label + '</span>';
-
     renderPage(page);
   }
 
   function renderPage(page) {
-    // Check for sub-routes
+    // Admission module handles its own sub-routes internally
     if (page === 'admission') {
-      // Check for new/edit sub-route via hash
-      var hash = window.location.hash;
-      if (hash.includes('/new')) {
-        renderAdmissionForm('new');
-        return;
-      } else if (hash.includes('/edit/')) {
-        var id = hash.split('/edit/')[1];
-        if (id) {
-          renderAdmissionForm('edit', id);
-          return;
-        }
-      }
-      // Default: show admission list
       renderAdmission();
       return;
     }
-
     switch (page) {
-      case 'dashboard':
-        renderDashboard();
-        break;
-      case 'students':
-        renderStudents();
-        break;
-      case 'teachers':
-        renderTeachers();
-        break;
-      case 'fees':
-        renderFees();
-        break;
-      case 'salary':
-        renderSalary();
-        break;
-      case 'receipts':
-        renderReceipts();
-        break;
-      case 'attendance':
-        renderAttendance();
-        break;
-      case 'administration':
-        renderAdministration();
-        break;
-      default:
-        renderDashboard();
+      case 'dashboard': renderDashboard(); break;
+      case 'students': renderStudents(); break;
+      case 'teachers': renderTeachers(); break;
+      case 'fees': renderFees(); break;
+      case 'salary': renderSalary(); break;
+      case 'receipts': renderReceipts(); break;
+      case 'attendance': renderAttendance(); break;
+      case 'administration': renderAdministration(); break;
+      default: renderDashboard();
     }
   }
 
@@ -174,7 +125,6 @@
       pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Firebase...</div></div>';
       return;
     }
-
     pageContainer.innerHTML = `
       <div class="page-header">
         <div><h1 class="page-title">Dashboard</h1><p class="page-subtitle">Overview of Janaki Professional Academy</p></div>
@@ -191,14 +141,13 @@
         <div class="card-body"><div id="recent-admissions">Loading...</div></div>
       </div>
     `;
-
     db.ref('admissions').once('value').then(function(snapshot) {
       var total = snapshot.numChildren();
       var enrolled = 0, pending = 0;
       snapshot.forEach(function(child) {
         var data = child.val();
         if (data.status === 'Submitted') enrolled++;
-        else pending++;
+        else if (data.status === 'Draft') pending++;
       });
       document.getElementById('stat-admissions').textContent = total;
       document.getElementById('stat-enrolled').textContent = enrolled;
@@ -207,7 +156,6 @@
     }).catch(function() {
       document.getElementById('stat-admissions').textContent = 'Error';
     });
-
     db.ref('admissions').orderByChild('submittedAt').limitToLast(5).once('value').then(function(snapshot) {
       var html = '';
       if (!snapshot.exists()) {
@@ -224,7 +172,8 @@
         items.forEach(function(item) {
           var name = (item.student && item.student.name) || 'Unknown';
           var cls = (item.student && item.student.class) || 'N/A';
-          html += '<li style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);"><span><strong>' + name + '</strong> - ' + cls + '</span><span class="badge green">Submitted</span></li>';
+          var statusBadge = item.status === 'Submitted' ? '<span class="badge green">Submitted</span>' : '<span class="badge amber">Draft</span>';
+          html += '<li style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);"><span><strong>' + name + '</strong> - ' + cls + '</span>' + statusBadge + '</li>';
         });
         html += '</ul>';
       }
@@ -237,10 +186,8 @@
     pageContainer.innerHTML = '' +
       '<div class="page-header"><div><h1 class="page-title">Students</h1><p class="page-subtitle">Manage all enrolled students</p></div></div>' +
       '<div class="table-wrap"><div class="table-scroll"><table class="data-table"><thead><tr><th>Enrollment ID</th><th>Name</th><th>Class</th><th>Roll</th><th>Status</th></tr></thead><tbody id="students-body"><tr><td colspan="5"><div class="state"><div class="spinner"></div></div></td></tr></tbody></table></div></div>';
-
     var db = window.db;
     if (!db) return;
-
     db.ref('students').once('value').then(function(snapshot) {
       var tbody = document.getElementById('students-body');
       if (!snapshot.exists()) {
@@ -262,102 +209,66 @@
     });
   }
 
-  // ---- Admission List ----
+  // ---- Admission Module (lazy load, no sub-route logic) ----
   function renderAdmission() {
+    pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Admission Module...</div></div>';
     import('./admission/admission-router.js').then(function(module) {
       if (module && typeof module.render === 'function') {
         module.render(pageContainer);
+      } else {
+        pageContainer.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Module not loaded</div></div>';
       }
     }).catch(function(error) {
       console.error('Admission module load error:', error);
-      pageContainer.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Module not loaded</div><div class="state-sub">' + error.message + '</div></div>';
+      pageContainer.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Error loading module</div></div>';
     });
   }
 
-  // ---- Admission Form (full page) ----
-  function renderAdmissionForm(mode, id) {
-    import('./admission/admission-router.js').then(function(module) {
-      if (module && typeof module.renderForm === 'function') {
-        module.renderForm(pageContainer, mode, id);
-      } else {
-        pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Admission Form...</div></div>';
-        // Fallback: wait for module to define renderForm
-        setTimeout(function() {
-          if (window.admissionModule && typeof window.admissionModule.renderForm === 'function') {
-            window.admissionModule.renderForm(pageContainer, mode, id);
-          } else {
-            pageContainer.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Form not available</div></div>';
-          }
-        }, 500);
-      }
-    }).catch(function(error) {
-      console.error('Form load error:', error);
-      pageContainer.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Error loading form</div></div>';
-    });
-  }
-
-  // ---- Other modules (lazy load) ----
+  // ---- Other Modules (placeholders) ----
   function renderTeachers() {
     pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Teachers Module...</div></div>';
     import('./teachers.js').then(function(module) {
-      if (module && typeof module.render === 'function') {
-        module.render(pageContainer);
-      }
+      if (module && typeof module.render === 'function') module.render(pageContainer);
     }).catch(function() {
       pageContainer.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Module not loaded</div></div>';
     });
   }
-
   function renderFees() {
     pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Fee Module...</div></div>';
     import('./fees.js').then(function(module) {
-      if (module && typeof module.render === 'function') {
-        module.render(pageContainer);
-      }
+      if (module && typeof module.render === 'function') module.render(pageContainer);
     }).catch(function() {
       pageContainer.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Module not loaded</div></div>';
     });
   }
-
   function renderSalary() {
     pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Salary Module...</div></div>';
     import('./salary.js').then(function(module) {
-      if (module && typeof module.render === 'function') {
-        module.render(pageContainer);
-      }
+      if (module && typeof module.render === 'function') module.render(pageContainer);
     }).catch(function() {
       pageContainer.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Module not loaded</div></div>';
     });
   }
-
   function renderReceipts() {
     pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Receipts Module...</div></div>';
     import('./receipts.js').then(function(module) {
-      if (module && typeof module.render === 'function') {
-        module.render(pageContainer);
-      }
+      if (module && typeof module.render === 'function') module.render(pageContainer);
     }).catch(function() {
       pageContainer.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Module not loaded</div></div>';
     });
   }
-
   function renderAttendance() {
     pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Attendance Module...</div></div>';
     import('./attendance.js').then(function(module) {
-      if (module && typeof module.render === 'function') {
-        module.render(pageContainer);
-      }
+      if (module && typeof module.render === 'function') module.render(pageContainer);
     }).catch(function() {
       pageContainer.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Module not loaded</div></div>';
     });
   }
-
   function renderAdministration() {
     pageContainer.innerHTML = '<div class="state"><div class="spinner"></div><div class="state-title">Loading Administration Module...</div></div>';
     import('./administration.js').then(function(module) {
-      if (module && typeof module.render === 'function') {
-        module.render(pageContainer);
-      }
+      if (module && typeof module.render === 'function') module.render(pageContainer);
     }).catch(function() {
       pageContainer.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Module not loaded</div></div>';
     });
@@ -369,11 +280,7 @@
       e.preventDefault();
       var route = this.getAttribute('data-route');
       if (route) {
-        if (route === 'admission') {
-          window.location.hash = 'admission';
-        } else {
-          window.location.hash = route;
-        }
+        window.location.hash = route;
         navigate(route);
       }
     });
@@ -382,21 +289,11 @@
   window.addEventListener('hashchange', function() {
     var hash = window.location.hash.replace('#/', '');
     if (!hash) hash = 'dashboard';
-    // Handle sub-routes
-    if (hash.startsWith('admission')) {
-      navigate('admission');
-    } else {
-      navigate(hash);
-    }
+    navigate(hash);
   });
 
-  // ---- Bootstrap ----
   document.addEventListener('DOMContentLoaded', function() {
     var initialRoute = window.location.hash.replace('#/', '') || 'dashboard';
-    if (initialRoute.startsWith('admission')) {
-      navigate('admission');
-    } else {
-      navigate(initialRoute);
-    }
+    navigate(initialRoute);
   });
 })();
