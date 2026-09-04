@@ -14,4 +14,11 @@
   }
   window.db = firebase.database ? firebase.database() : null;
   window.auth = firebase.auth ? firebase.auth() : null;
+
+  // ---- Cloudinary Configuration ----
+  window.cloudinaryConfig = {
+    cloudName: 'bhi40buv',
+    uploadPreset: 'janaki_professional_academy_uploads',
+    folder: 'admission_photos/'
+  };
 })();
