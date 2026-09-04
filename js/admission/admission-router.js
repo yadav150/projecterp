@@ -1,15 +1,17 @@
 // js/admission/admission-router.js
 var db = window.db;
 
-// Initialize the module object early
+// Initialize module object
 window.admissionModule = {};
 
 var ADMISSIONS_PATH = 'admissions';
 var STUDENTS_PATH = 'students';
 var COUNTERS_PATH = 'admissionCounters';
+var ENROLLMENT_COUNTERS_PATH = 'enrollmentCounters';
 
 var allAdmissions = [];
 var currentEditId = null;
+var currentMode = 'new'; // 'new' or 'edit'
 
 // ---- Helper Functions ----
 function generateToken() {
@@ -25,6 +27,13 @@ function getCurrentSession() {
   var startYear = month >= 4 ? year : year - 1;
   var endYear = startYear + 1;
   return startYear + '-' + String(endYear).slice(-2);
+}
+
+function getCurrentAcademicYear() {
+  var now = new Date();
+  var year = now.getFullYear();
+  var month = now.getMonth() + 1;
+  return month >= 4 ? year : year - 1;
 }
 
 function formatDate(dateStr) {
@@ -45,16 +54,10 @@ function getStatusBadge(status) {
 }
 
 // ---- ID Generation ----
-function generateApplicationNumber(counter) {
-  var year = new Date().getFullYear();
-  var padded = String(counter).padStart(3, '0');
-  return 'APP-' + year + '-' + padded;
-}
-
-function generateAdmissionNumber(counter) {
-  var year = new Date().getFullYear();
-  var padded = String(counter).padStart(3, '0');
-  return 'ADM-' + year + '-' + padded;
+function generateEnrollmentId(year, counter) {
+  var yearSuffix = String(year).slice(-2);
+  var padded = String(counter).padStart(5, '0');
+  return yearSuffix + padded;
 }
 
 function generateRollNumber(classVal, sectionVal, counter) {
@@ -69,7 +72,7 @@ function getCounterKey(classVal, sectionVal) {
 }
 
 function getNextCounter(path, defaultValue) {
-  return db.ref(COUNTERS_PATH + '/' + path).transaction(function(current) {
+  return db.ref(path).transaction(function(current) {
     return (current || 0) + 1;
   }).then(function(result) {
     if (result.committed) {
@@ -79,7 +82,58 @@ function getNextCounter(path, defaultValue) {
   });
 }
 
-// ---- Render Main View ----
+// ---- Cloudinary Upload ----
+function uploadToCloudinary(file, progressCallback) {
+  return new Promise(function(resolve, reject) {
+    var cloudName = window.cloudinaryConfig.cloudName;
+    var uploadPreset = window.cloudinaryConfig.uploadPreset;
+    var folder = window.cloudinaryConfig.folder;
+
+    var formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', uploadPreset);
+    formData.append('folder', folder);
+    formData.append('public_id', 'student_' + Date.now() + '_' + file.name.replace(/[^a-zA-Z0-9.]/g, '_'));
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('POST', 'https://api.cloudinary.com/v1_1/' + cloudName + '/image/upload', true);
+
+    xhr.upload.onprogress = function(e) {
+      if (e.lengthComputable && progressCallback) {
+        var progress = (e.loaded / e.total) * 100;
+        progressCallback(progress);
+      }
+    };
+
+    xhr.onload = function() {
+      if (xhr.status === 200) {
+        try {
+          var response = JSON.parse(xhr.responseText);
+          resolve({
+            url: response.secure_url,
+            publicId: response.public_id,
+            format: response.format,
+            bytes: response.bytes
+          });
+        } catch (e) {
+          reject(new Error('Invalid response from Cloudinary'));
+        }
+      } else {
+        reject(new Error('Upload failed: ' + xhr.status + ' ' + xhr.statusText));
+      }
+    };
+
+    xhr.onerror = function() {
+      reject(new Error('Network error uploading to Cloudinary'));
+    };
+
+    xhr.send(formData);
+  });
+}
+
+// ============================================================
+// RENDER: Admission List
+// ============================================================
 function render(container) {
   if (!container) return;
   if (!db) {
@@ -89,35 +143,28 @@ function render(container) {
 
   var html = '' +
     '<div class="page-header">' +
-      '<div><h1 class="page-title">Admission</h1><p class="page-subtitle">Multi-stage student admission workflow</p></div>' +
-      '<div class="page-actions"><button class="btn btn-primary" onclick="window.admissionModule.openNewAdmission()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Admission</button></div>' +
+      '<div><h1 class="page-title">Admission</h1><p class="page-subtitle">Manage student admissions</p></div>' +
+      '<div class="page-actions"><a class="btn btn-primary" href="#/admission/new"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Admission</a></div>' +
     '</div>' +
     '<div class="filter-bar">' +
-      '<div class="search-input"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Search by name, application number..." id="admission-search" oninput="window.admissionModule.filterTable()"></div>' +
+      '<div class="search-input"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" placeholder="Search by name, enrollment ID..." id="admission-search" oninput="window.admissionModule.filterTable()"></div>' +
       '<select class="select" id="admission-status-filter" onchange="window.admissionModule.filterTable()"><option value="">All Statuses</option><option value="Draft">Draft</option><option value="Submitted">Submitted</option></select>' +
     '</div>' +
-    '<div class="table-wrap"><div class="table-scroll"><table class="data-table"><thead><tr><th>Application #</th><th>Student</th><th>Class</th><th>Admission #</th><th>Status</th><th>Actions</th></tr></thead><tbody id="admission-body"><tr><td colspan="6"><div class="state"><div class="spinner"></div></div></td></tr></tbody></table></div></div>';
+    '<div class="table-wrap"><div class="table-scroll"><table class="data-table"><thead><tr><th>Enrollment ID</th><th>Student</th><th>Class</th><th>Roll</th><th>Status</th><th>Actions</th></tr></thead><tbody id="admission-body"><tr><td colspan="6"><div class="state"><div class="spinner"></div></div></td></tr></tbody></table></div></div>';
 
   container.innerHTML = html;
 
-  // Assign all module functions to the global object
+  // Expose module functions
   window.admissionModule.render = render;
-  window.admissionModule.openNewAdmission = openNewAdmission;
-  window.admissionModule.openEditAdmission = openEditAdmission;
+  window.admissionModule.renderForm = renderForm;
+  window.admissionModule.filterTable = filterTable;
   window.admissionModule.viewAdmission = viewAdmission;
   window.admissionModule.deleteRecord = deleteRecord;
-  window.admissionModule.filterTable = filterTable;
   window.admissionModule.downloadPDF = downloadPDF;
-  window.admissionModule.uploadPhoto = uploadPhoto;
-  window.admissionModule.removePhoto = removePhoto;
-  window.admissionModule.toggleOfflineDeclaration = toggleOfflineDeclaration;
-  window.admissionModule.goToStep = goToStep;
-  window.admissionModule.submitAdmission = submitAdmission;
 
   loadAdmissions();
 }
 
-// ---- Load Admissions ----
 function loadAdmissions() {
   db.ref(ADMISSIONS_PATH).once('value').then(function(snapshot) {
     allAdmissions = [];
@@ -126,7 +173,7 @@ function loadAdmissions() {
       data.id = child.key;
       allAdmissions.push(data);
     });
-    allAdmissions.sort(function(a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });
+    allAdmissions.sort(function(a, b) { return (b.submittedAt || 0) - (a.submittedAt || 0); });
     renderTableRows(allAdmissions);
   }).catch(function(error) {
     console.error('Error loading admissions:', error);
@@ -137,34 +184,34 @@ function loadAdmissions() {
   });
 }
 
-// ---- Render Table Rows ----
 function renderTableRows(admissions) {
   var tbody = document.getElementById('admission-body');
   if (!tbody) return;
 
   if (!admissions || admissions.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6"><div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><div class="state-title">No admissions found</div><div class="state-sub">Click "New Admission" to start a new application.</div></div></td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6"><div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg><div class="state-title">No admissions found</div><div class="state-sub">Click "New Admission" to start.</div></div></td></tr>';
     return;
   }
 
   var rows = '';
   admissions.forEach(function(item) {
-    var studentName = item.student ? item.student.name : 'N/A';
-    var studentClass = item.student ? item.student.class : 'N/A';
-    var appNum = item.applicationNumber || 'N/A';
-    var admNum = item.admissionNumber || '—';
+    var s = item.student || {};
+    var name = s.name || 'N/A';
+    var cls = s.class || 'N/A';
+    var enrollmentId = item.enrollmentId || '—';
+    var roll = item.rollNumber || '—';
     var statusBadge = item.status === 'Submitted' ? '<span class="badge green">Submitted</span>' : '<span class="badge amber">Draft</span>';
 
     rows += '' +
       '<tr>' +
-        '<td><strong>' + appNum + '</strong></td>' +
-        '<td>' + studentName + '</td>' +
-        '<td>' + studentClass + '</td>' +
-        '<td>' + admNum + '</td>' +
+        '<td><strong>' + enrollmentId + '</strong></td>' +
+        '<td>' + name + '</td>' +
+        '<td>' + cls + '</td>' +
+        '<td>' + roll + '</td>' +
         '<td>' + statusBadge + '</td>' +
         '<td><div class="row-actions">' +
           '<button class="icon-btn-sm" onclick="window.admissionModule.viewAdmission(\'' + item.id + '\')" title="View"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>' +
-          '<button class="icon-btn-sm" onclick="window.admissionModule.openEditAdmission(\'' + item.id + '\')" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>' +
+          (item.status !== 'Submitted' ? '<a class="icon-btn-sm" href="#/admission/edit/' + item.id + '" title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></a>' : '') +
           '<button class="icon-btn-sm" onclick="window.admissionModule.downloadPDF(\'' + item.id + '\')" title="Download PDF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></button>' +
           '<button class="icon-btn-sm danger" onclick="window.admissionModule.deleteRecord(\'' + item.id + '\')" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>' +
         '</div></td>' +
@@ -173,7 +220,6 @@ function renderTableRows(admissions) {
   tbody.innerHTML = rows;
 }
 
-// ---- Filter Table ----
 function filterTable() {
   var search = document.getElementById('admission-search');
   var statusFilter = document.getElementById('admission-status-filter');
@@ -181,16 +227,19 @@ function filterTable() {
   var status = statusFilter ? statusFilter.value : '';
 
   var filtered = allAdmissions.filter(function(item) {
-    var studentName = (item.student && item.student.name) || '';
-    var appNum = item.applicationNumber || '';
-    var matchQuery = studentName.toLowerCase().includes(query) || appNum.toLowerCase().includes(query);
+    var s = item.student || {};
+    var name = (s.name || '').toLowerCase();
+    var enrollmentId = (item.enrollmentId || '').toLowerCase();
+    var matchQuery = name.includes(query) || enrollmentId.includes(query);
     var matchStatus = status === '' || item.status === status;
     return matchQuery && matchStatus;
   });
   renderTableRows(filtered);
 }
 
-// ---- View Admission ----
+// ============================================================
+// VIEW ADMISSION
+// ============================================================
 function viewAdmission(id) {
   var item = allAdmissions.find(function(a) { return a.id === id; });
   if (!item) {
@@ -208,7 +257,7 @@ function viewAdmission(id) {
 
   var bodyHtml = '' +
     '<div style="margin-bottom:20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">' +
-      '<div><strong>Application #:</strong> ' + (item.applicationNumber || 'N/A') + ' &nbsp;|&nbsp; <strong>Admission #:</strong> ' + (item.admissionNumber || '—') + ' &nbsp;|&nbsp; <strong>Roll #:</strong> ' + (item.rollNumber || '—') + '</div>' +
+      '<div><strong>Enrollment ID:</strong> ' + (item.enrollmentId || '—') + ' &nbsp;|&nbsp; <strong>Roll #:</strong> ' + (item.rollNumber || '—') + '</div>' +
       '<div>Status: ' + getStatusBadge(item.status || 'Draft') + '</div>' +
     '</div>' +
     '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px;padding:12px;background:#f8fafc;border-radius:5px;border:1px solid #e2e8f0;align-items:center;">' +
@@ -264,7 +313,7 @@ function viewAdmission(id) {
 
   var footerHtml = '' +
     '<button class="btn btn-outline" onclick="window.closeModal()">Close</button>' +
-    (item.status !== 'Submitted' ? '<button class="btn btn-primary" onclick="window.closeModal();window.admissionModule.openEditAdmission(\'' + item.id + '\')">Edit Application</button>' : '') +
+    (item.status !== 'Submitted' ? '<a class="btn btn-primary" href="#/admission/edit/' + item.id + '">Edit Application</a>' : '') +
     '<button class="btn btn-primary" onclick="window.closeModal();window.admissionModule.downloadPDF(\'' + item.id + '\')">Download PDF</button>';
 
   window.openModal('Admission Details', bodyHtml, footerHtml, true);
@@ -292,34 +341,71 @@ function deleteRecord(id) {
   }
 }
 
-// ---- OPEN NEW ADMISSION (Multi-Step) ----
-function openNewAdmission() {
-  currentEditId = null;
-  showStep(1);
-}
+// ============================================================
+// RENDER FORM – Full Page Multi-Step
+// ============================================================
+var formData = {};
+var formStep = 1;
 
-function openEditAdmission(id) {
-  currentEditId = id;
-  var item = allAdmissions.find(function(a) { return a.id === id; });
-  if (!item) {
-    window.showToast('Record not found.', 'error');
+function renderForm(container, mode, id) {
+  if (!container) return;
+  if (!db) {
+    container.innerHTML = '<div class="state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><div class="state-title">Database not available</div></div>';
     return;
   }
-  showStep(1, item);
+
+  currentMode = mode || 'new';
+  currentEditId = id || null;
+
+  // Load existing data if editing
+  if (currentMode === 'edit' && currentEditId) {
+    db.ref(ADMISSIONS_PATH + '/' + currentEditId).once('value').then(function(snapshot) {
+      if (snapshot.exists()) {
+        formData = snapshot.val();
+        formData.id = currentEditId;
+      } else {
+        formData = {};
+        window.showToast('Record not found, starting fresh.', 'info');
+      }
+      renderFormPage(container);
+    }).catch(function() {
+      formData = {};
+      renderFormPage(container);
+    });
+  } else {
+    formData = {};
+    renderFormPage(container);
+  }
 }
 
-// ---- Step Renderer ----
-var stepData = {};
+function renderFormPage(container) {
+  var html = '' +
+    '<div class="page-header">' +
+      '<div><h1 class="page-title">' + (currentMode === 'edit' ? 'Edit Admission' : 'New Admission') + '</h1><p class="page-subtitle">Multi-step admission workflow</p></div>' +
+      '<div class="page-actions"><a class="btn btn-outline" href="#/admission"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg> Back to List</a></div>' +
+    '</div>' +
+    '<div class="card">' +
+      '<div class="card-body" id="admission-form-body">' +
+        '<div id="form-step-content">' +
+          renderStep(formStep) +
+        '</div>' +
+      '</div>' +
+    '</div>';
 
-function showStep(step, existingData) {
-  var root = document.getElementById('modal-root');
-  if (!root) return;
+  container.innerHTML = html;
 
-  var data = existingData || stepData;
-  if (existingData) {
-    stepData = JSON.parse(JSON.stringify(existingData));
-  }
+  // Expose form navigation
+  window.admissionModule.goToStep = goToStep;
+  window.admissionModule.submitAdmission = submitAdmission;
+  window.admissionModule.uploadPhoto = uploadPhoto;
+  window.admissionModule.removePhoto = removePhoto;
+  window.admissionModule.toggleOfflineDeclaration = toggleOfflineDeclaration;
 
+  // Initial render
+  renderStepContent();
+}
+
+function renderStep(step) {
   var totalSteps = 7;
   var stepTitles = [
     'Student Information',
@@ -331,7 +417,44 @@ function showStep(step, existingData) {
     'Submit'
   ];
 
-  var stepDescriptions = [
+  var html = '' +
+    '<div style="display:flex;justify-content:space-between;margin-bottom:24px;gap:4px;padding:0 4px;">';
+  for (var i = 1; i <= totalSteps; i++) {
+    var isActive = i === step;
+    var isCompleted = i < step;
+    var cls = 'step-indicator';
+    if (isActive) cls += ' active';
+    if (isCompleted) cls += ' completed';
+    html += '<div class="' + cls + '" style="flex:1;text-align:center;padding:8px 4px;border-radius:5px;font-size:11px;font-weight:600;' +
+      (isActive ? 'background:#dc3545;color:#fff;' :
+       isCompleted ? 'background:#e6f4ea;color:#1e7e34;' :
+       'background:#f1f5f9;color:#94a3b8;') + '">' + i + '</div>';
+  }
+  html += '</div>';
+
+  html += '<h3 style="margin:0 0 4px;">' + stepTitles[step-1] + '</h3>';
+  html += '<p style="margin:0 0 20px;color:#64748b;font-size:13px;">' + getStepDescription(step) + '</p>';
+  html += '<div id="step-content-body"></div>';
+
+  // Navigation buttons
+  html += '<div style="display:flex;justify-content:space-between;margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;flex-wrap:wrap;gap:8px;">';
+  if (step > 1) {
+    html += '<button class="btn btn-outline" onclick="window.admissionModule.goToStep(' + (step-1) + ')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><polyline points="15 18 9 12 15 6"/></svg> Back</button>';
+  } else {
+    html += '<a class="btn btn-outline" href="#/admission">Cancel</a>';
+  }
+  if (step < totalSteps) {
+    html += '<button class="btn btn-primary" onclick="window.admissionModule.goToStep(' + (step+1) + ')">Next <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><polyline points="9 18 15 12 9 6"/></svg></button>';
+  } else {
+    html += '<button class="btn btn-primary" onclick="window.admissionModule.submitAdmission()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Submit Admission</button>';
+  }
+  html += '</div>';
+
+  return html;
+}
+
+function getStepDescription(step) {
+  var descs = [
     'Basic student details, class, and admission information',
     'Parent and guardian contact details',
     'Present and permanent address with emergency contact',
@@ -340,109 +463,42 @@ function showStep(step, existingData) {
     'Verify all information before final submission',
     'Confirm and complete the admission'
   ];
-
-  var content = '';
-
-  // Step indicators
-  content += '<div style="display:flex;justify-content:space-between;margin-bottom:24px;gap:4px;padding:0 4px;">';
-  for (var i = 1; i <= totalSteps; i++) {
-    var isActive = i === step;
-    var isCompleted = i < step;
-    var label = i;
-    var cls = 'step-indicator';
-    if (isActive) cls += ' active';
-    if (isCompleted) cls += ' completed';
-    content += '<div class="' + cls + '" style="flex:1;text-align:center;padding:8px 4px;border-radius:5px;font-size:11px;font-weight:600;' +
-      (isActive ? 'background:#dc3545;color:#fff;' :
-       isCompleted ? 'background:#e6f4ea;color:#1e7e34;' :
-       'background:#f1f5f9;color:#94a3b8;') + '">' + label + '</div>';
-  }
-  content += '</div>';
-
-  // Step title and description
-  content += '<h3 style="margin:0 0 4px;">' + stepTitles[step-1] + '</h3>';
-  content += '<p style="margin:0 0 20px;color:#64748b;font-size:13px;">' + stepDescriptions[step-1] + '</p>';
-
-  // Step content
-  content += '<div id="step-content">';
-  content += renderStepContent(step, data);
-  content += '</div>';
-
-  // Navigation buttons
-  content += '<div style="display:flex;justify-content:space-between;margin-top:24px;padding-top:16px;border-top:1px solid #e2e8f0;flex-wrap:wrap;gap:8px;">';
-  if (step > 1) {
-    content += '<button class="btn btn-outline" onclick="window.admissionModule.goToStep(' + (step-1) + ')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><polyline points="15 18 9 12 15 6"/></svg> Back</button>';
-  } else {
-    content += '<button class="btn btn-outline" onclick="window.closeModal()">Cancel</button>';
-  }
-  if (step < totalSteps) {
-    content += '<button class="btn btn-primary" onclick="window.admissionModule.goToStep(' + (step+1) + ')">Next <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><polyline points="9 18 15 12 9 6"/></svg></button>';
-  } else {
-    content += '<button class="btn btn-primary" id="final-submit-btn" onclick="window.admissionModule.submitAdmission()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Submit Admission</button>';
-  }
-  content += '</div>';
-
-  // Inject into modal
-  var modalTitle = 'Admission Application' + (currentEditId ? ' (Edit)' : '') + ' — Step ' + step + ' of ' + totalSteps;
-
-  var backdrop = document.createElement('div');
-  backdrop.className = 'modal-backdrop';
-  backdrop.addEventListener('click', function(e) {
-    if (e.target === backdrop) window.closeModal();
-  });
-
-  backdrop.innerHTML = '' +
-    '<div class="modal large" role="dialog" aria-modal="true" style="max-width:900px;">' +
-      '<div class="modal-head">' +
-        '<div class="modal-title">' + modalTitle + '</div>' +
-        '<button class="modal-close" onclick="window.closeModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
-      '</div>' +
-      '<div class="modal-body" id="step-modal-body">' + content + '</div>' +
-      '<div class="modal-foot" style="display:none;"></div>' +
-    '</div>';
-
-  root.innerHTML = '';
-  root.appendChild(backdrop);
-
-  // Add inline styles for step indicators
-  var style = document.createElement('style');
-  style.textContent = '' +
-    '.step-indicator { transition: all 0.3s ease; cursor: default; }' +
-    '.step-indicator.completed { background: #e6f4ea !important; color: #1e7e34 !important; }' +
-    '.step-indicator.active { background: #dc3545 !important; color: #fff !important; }' +
-    '.step-indicator:not(.active):not(.completed) { background: #f1f5f9 !important; color: #94a3b8 !important; }';
-  document.head.appendChild(style);
+  return descs[step-1] || '';
 }
 
-function renderStepContent(step, data) {
-  var html = '';
+function renderStepContent() {
+  var body = document.getElementById('step-content-body');
+  if (!body) return;
+
+  var step = formStep;
+  var data = formData;
+
   switch(step) {
     case 1:
-      html = renderStep1(data);
+      body.innerHTML = renderStep1(data);
       break;
     case 2:
-      html = renderStep2(data);
+      body.innerHTML = renderStep2(data);
       break;
     case 3:
-      html = renderStep3(data);
+      body.innerHTML = renderStep3(data);
       break;
     case 4:
-      html = renderStep4(data);
+      body.innerHTML = renderStep4(data);
       break;
     case 5:
-      html = renderStep5(data);
+      body.innerHTML = renderStep5(data);
       break;
     case 6:
-      html = renderStep6(data);
+      body.innerHTML = renderStep6(data);
       break;
     case 7:
-      html = renderStep7(data);
+      body.innerHTML = renderStep7(data);
       break;
   }
-  return html;
 }
 
-// ---- STEP 1: Student Information ----
+// ---- Step Renderers ----
 function renderStep1(data) {
   var s = data.student || {};
   return '' +
@@ -455,15 +511,9 @@ function renderStep1(data) {
       '<div class="form-row"><label>Aadhaar Number</label><input class="input" id="s1-aadhaar" value="' + (s.aadhaar || '') + '" placeholder="XXXX-XXXX-XXXX" /></div>' +
       '<div class="form-row"><label>Class <span class="req">*</span></label><select class="select" id="s1-class"><option value="">Select</option><option value="Nursery"' + (s.class === 'Nursery' ? ' selected' : '') + '>Nursery</option><option value="KG1"' + (s.class === 'KG1' ? ' selected' : '') + '>KG1</option><option value="KG2"' + (s.class === 'KG2' ? ' selected' : '') + '>KG2</option><option value="1"' + (s.class === '1' ? ' selected' : '') + '>Class 1</option><option value="2"' + (s.class === '2' ? ' selected' : '') + '>Class 2</option><option value="3"' + (s.class === '3' ? ' selected' : '') + '>Class 3</option><option value="4"' + (s.class === '4' ? ' selected' : '') + '>Class 4</option><option value="5"' + (s.class === '5' ? ' selected' : '') + '>Class 5</option><option value="6"' + (s.class === '6' ? ' selected' : '') + '>Class 6</option><option value="7"' + (s.class === '7' ? ' selected' : '') + '>Class 7</option><option value="8"' + (s.class === '8' ? ' selected' : '') + '>Class 8</option><option value="9"' + (s.class === '9' ? ' selected' : '') + '>Class 9</option><option value="10"' + (s.class === '10' ? ' selected' : '') + '>Class 10</option></select></div>' +
       '<div class="form-row"><label>Section</label><select class="select" id="s1-section"><option value="NA"' + (!s.section || s.section === 'NA' ? ' selected' : '') + '>NA</option><option value="A"' + (s.section === 'A' ? ' selected' : '') + '>A</option><option value="B"' + (s.section === 'B' ? ' selected' : '') + '>B</option><option value="C"' + (s.section === 'C' ? ' selected' : '') + '>C</option></select></div>' +
-    '</div>' +
-    '<div style="margin-top:12px;padding:12px;background:#f8fafc;border-radius:5px;border:1px solid #e2e8f0;font-size:12px;color:#64748b;">' +
-      '<div style="display:flex;gap:20px;flex-wrap:wrap;">' +
-        '<div><strong>Application Number:</strong> <span id="s1-app-number">' + (data.applicationNumber || 'Will be auto-generated') + '</span></div>' +
-      '</div>' +
     '</div>';
 }
 
-// ---- STEP 2: Parent / Guardian ----
 function renderStep2(data) {
   var p = data.parent || {};
   return '' +
@@ -477,7 +527,6 @@ function renderStep2(data) {
     '</div>';
 }
 
-// ---- STEP 3: Address & Contact ----
 function renderStep3(data) {
   var a = data.address || {};
   return '' +
@@ -492,7 +541,6 @@ function renderStep3(data) {
     '</div>';
 }
 
-// ---- STEP 4: Previous Academic ----
 function renderStep4(data) {
   var p = data.previous || {};
   return '' +
@@ -504,7 +552,6 @@ function renderStep4(data) {
     '</div>';
 }
 
-// ---- STEP 5: Documents ----
 function renderStep5(data) {
   var docs = data.documents || {};
   var photo = docs.photo || {};
@@ -561,7 +608,6 @@ function renderStep5(data) {
     '</div>';
 }
 
-// ---- STEP 6: Review & Confirmation ----
 function renderStep6(data) {
   var s = data.student || {};
   var p = data.parent || {};
@@ -614,7 +660,6 @@ function renderStep6(data) {
 
   var html = '' +
     '<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px;padding:12px;background:#f8fafc;border-radius:5px;border:1px solid #e2e8f0;">' +
-      '<div><strong>Application Number:</strong> ' + (data.applicationNumber || 'Will be auto-generated') + '</div>' +
       '<div><strong>Academic Session:</strong> ' + getCurrentSession() + '</div>' +
       '<div><strong>Admission Date:</strong> ' + formatDate(s.admissionDate) + '</div>' +
     '</div>';
@@ -637,12 +682,10 @@ function renderStep6(data) {
   return html;
 }
 
-// ---- STEP 7: Submit ----
 function renderStep7(data) {
   var s = data.student || {};
   var p = data.parent || {};
   var a = data.address || {};
-  var prv = data.previous || {};
   var docs = data.documents || {};
 
   var photoStatus = docs.photo ? docs.photo.status : 'Pending';
@@ -700,29 +743,40 @@ function renderStep7(data) {
 
 // ---- Navigation ----
 function goToStep(step) {
-  var saved = collectStepData();
-  if (saved) {
-    stepData = saved;
-  }
+  // Save current step data before moving
+  collectStepData();
 
-  if (step > getCurrentStep()) {
-    var validation = validateStep(getCurrentStep(), stepData);
+  // Validate before moving forward
+  if (step > formStep) {
+    var validation = validateStep(formStep, formData);
     if (!validation.valid) {
       showValidationError(validation.message);
       return;
     }
   }
 
-  showStep(step, stepData);
-}
-
-function getCurrentStep() {
-  return window._admissionStep || 1;
+  formStep = step;
+  renderStepContent();
+  // Update the step indicator and title
+  var formBody = document.getElementById('admission-form-body');
+  if (formBody) {
+    var container = formBody.parentElement;
+    if (container) {
+      // Re-render the entire step container
+      var stepContainer = document.getElementById('form-step-content');
+      if (stepContainer) {
+        stepContainer.innerHTML = renderStep(formStep);
+        // Re-bind content
+        renderStepContent();
+      }
+    }
+  }
 }
 
 function collectStepData() {
-  var data = JSON.parse(JSON.stringify(stepData || {}));
+  var data = JSON.parse(JSON.stringify(formData || {}));
 
+  // Step 1
   var s1Name = document.getElementById('s1-name');
   var s1Dob = document.getElementById('s1-dob');
   var s1Gender = document.getElementById('s1-gender');
@@ -742,6 +796,7 @@ function collectStepData() {
     data.student.admissionDate = s1AdmissionDate ? s1AdmissionDate.value : '';
   }
 
+  // Step 2
   var s2Father = document.getElementById('s2-father');
   var s2Mother = document.getElementById('s2-mother');
   var s2GuardianName = document.getElementById('s2-guardian-name');
@@ -759,6 +814,7 @@ function collectStepData() {
     data.parent.email = s2Email ? s2Email.value.trim() : '';
   }
 
+  // Step 3
   var s3Present = document.getElementById('s3-present');
   var s3Permanent = document.getElementById('s3-permanent');
   var s3Village = document.getElementById('s3-village');
@@ -778,6 +834,7 @@ function collectStepData() {
     data.address.emergencyContact = s3Emergency ? s3Emergency.value.trim() : '';
   }
 
+  // Step 4
   var s4School = document.getElementById('s4-school');
   var s4Class = document.getElementById('s4-class');
   var s4Board = document.getElementById('s4-board');
@@ -791,7 +848,7 @@ function collectStepData() {
     data.previous.rollNumber = s4Roll ? s4Roll.value.trim() : '';
   }
 
-  return data;
+  formData = data;
 }
 
 function validateStep(step, data) {
@@ -842,7 +899,7 @@ function validateStep(step, data) {
 }
 
 function showValidationError(message) {
-  var body = document.getElementById('step-modal-body');
+  var body = document.getElementById('admission-form-body');
   if (body) {
     var existing = document.getElementById('validation-error');
     if (existing) existing.remove();
@@ -877,53 +934,62 @@ function uploadPhoto() {
 
     var statusEl = document.getElementById('photo-upload-status');
     if (statusEl) {
-      statusEl.innerHTML = 'Uploading to cloud... <span class="spinner" style="display:inline-block;width:14px;height:14px;border-width:2px;margin-left:8px;"></span>';
+      statusEl.innerHTML = 'Uploading to Cloudinary... <span class="spinner" style="display:inline-block;width:14px;height:14px;border-width:2px;margin-left:8px;"></span>';
       statusEl.style.color = '#1e293b';
     }
 
-    var reader = new FileReader();
-    reader.onload = function(ev) {
-      var preview = document.querySelector('#step-modal-body img');
-      if (preview) {
-        preview.src = ev.target.result;
-      } else {
-        var container = document.querySelector('#step-modal-body .photo-upload-preview');
-        if (container) {
-          container.innerHTML = '<img src="' + ev.target.result + '" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #e2e8f0;" />';
-        }
+    uploadToCloudinary(file, function(progress) {
+      if (statusEl) {
+        statusEl.innerHTML = 'Uploading... ' + Math.round(progress) + '%';
       }
-
-      stepData.documents = stepData.documents || {};
-      stepData.documents.photo = {
+    })
+    .then(function(result) {
+      formData.documents = formData.documents || {};
+      formData.documents.photo = {
         status: 'Uploaded',
-        url: ev.target.result,
+        url: result.url,
+        publicId: result.publicId,
         fileName: file.name,
         fileSize: file.size
       };
 
+      // Update UI preview
+      var preview = document.querySelector('#admission-form-body img');
+      if (preview) {
+        preview.src = result.url;
+        preview.style.display = 'block';
+      } else {
+        var container = document.querySelector('#admission-form-body .photo-upload-preview');
+        if (container) {
+          container.innerHTML = '<img src="' + result.url + '" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:2px solid #e2e8f0;" />';
+        }
+      }
+
       if (statusEl) {
-        statusEl.innerHTML = '✓ Uploaded successfully';
+        statusEl.innerHTML = '✓ Uploaded successfully to Cloudinary';
         statusEl.style.color = '#1e7e34';
       }
 
-      var statusBadge = document.querySelector('#step-modal-body .photo-status');
-      if (statusBadge) {
-        statusBadge.innerHTML = '<span class="badge green">Uploaded</span>';
-      }
-
       window.showToast('Photo uploaded successfully.', 'success');
-    };
-    reader.readAsDataURL(file);
+    })
+    .catch(function(error) {
+      console.error('Upload error:', error);
+      if (statusEl) {
+        statusEl.innerHTML = 'Upload failed: ' + error.message;
+        statusEl.style.color = '#dc3545';
+      }
+      window.showToast('Upload failed: ' + error.message, 'error');
+    });
   };
   input.click();
 }
 
 function removePhoto() {
   if (confirm('Remove the uploaded photo?')) {
-    stepData.documents = stepData.documents || {};
-    stepData.documents.photo = { status: 'Pending' };
+    formData.documents = formData.documents || {};
+    formData.documents.photo = { status: 'Pending' };
 
-    var img = document.querySelector('#step-modal-body img');
+    var img = document.querySelector('#admission-form-body img');
     if (img) {
       img.src = '';
       img.style.display = 'none';
@@ -940,67 +1006,48 @@ function removePhoto() {
 }
 
 function toggleOfflineDeclaration(checked) {
-  stepData.documents = stepData.documents || {};
-  stepData.documents.offlineDeclared = checked;
+  formData.documents = formData.documents || {};
+  formData.documents.offlineDeclared = checked;
 
   if (checked) {
     var docTypes = ['aadhaar', 'birthCertificate', 'transferCertificate', 'marksheet'];
     docTypes.forEach(function(type) {
-      if (!stepData.documents[type]) {
-        stepData.documents[type] = {};
+      if (!formData.documents[type]) {
+        formData.documents[type] = {};
       }
-      stepData.documents[type].status = 'Offline Declaration';
-      stepData.documents[type].declared = true;
+      formData.documents[type].status = 'Offline Declaration';
+      formData.documents[type].declared = true;
     });
     window.showToast('Offline declaration enabled for documents.', 'info');
-
-    var step = 5;
-    var body = document.getElementById('step-modal-body');
-    if (body) {
-      var content = body.querySelector('#step-content');
-      if (content) {
-        content.innerHTML = renderStepContent(step, stepData);
-        var checkbox = document.getElementById('s5-offline-declaration');
-        if (checkbox) {
-          checkbox.checked = true;
-        }
-      }
-    }
+    // Re-render step 5
+    renderStepContent();
   } else {
     var docTypes = ['aadhaar', 'birthCertificate', 'transferCertificate', 'marksheet'];
     docTypes.forEach(function(type) {
-      if (stepData.documents[type] && stepData.documents[type].declared) {
-        stepData.documents[type].status = 'Pending';
-        stepData.documents[type].declared = false;
+      if (formData.documents[type] && formData.documents[type].declared) {
+        formData.documents[type].status = 'Pending';
+        formData.documents[type].declared = false;
       }
     });
     window.showToast('Offline declaration disabled.', 'info');
-
-    var step = 5;
-    var body = document.getElementById('step-modal-body');
-    if (body) {
-      var content = body.querySelector('#step-content');
-      if (content) {
-        content.innerHTML = renderStepContent(step, stepData);
-      }
-    }
+    renderStepContent();
   }
 }
 
 // ---- Submit Admission ----
 function submitAdmission() {
-  var data = collectStepData();
+  collectStepData();
 
-  var v1 = validateStep(1, data);
+  var v1 = validateStep(1, formData);
   if (!v1.valid) { showValidationError(v1.message); return; }
-  var v2 = validateStep(2, data);
+  var v2 = validateStep(2, formData);
   if (!v2.valid) { showValidationError(v2.message); return; }
-  var v3 = validateStep(3, data);
+  var v3 = validateStep(3, formData);
   if (!v3.valid) { showValidationError(v3.message); return; }
-  var v5 = validateStep(5, data);
+  var v5 = validateStep(5, formData);
   if (!v5.valid) { showValidationError(v5.message); return; }
 
-  var docs = data.documents || {};
+  var docs = formData.documents || {};
   var photoStatus = docs.photo ? docs.photo.status : 'Pending';
   if (photoStatus !== 'Uploaded') {
     showValidationError('Passport photo must be uploaded before submission.');
@@ -1008,38 +1055,36 @@ function submitAdmission() {
   }
 
   var now = Date.now();
-  var submissionData = {
-    student: data.student || {},
-    parent: data.parent || {},
-    address: data.address || {},
-    previous: data.previous || {},
-    documents: data.documents || {},
-    status: 'Submitted',
-    submittedAt: now,
-    updatedAt: now
-  };
+  var s = formData.student || {};
 
-  submissionData.academicSession = getCurrentSession();
+  // If editing, update existing
+  if (currentMode === 'edit' && currentEditId) {
+    var updateData = {
+      student: formData.student || {},
+      parent: formData.parent || {},
+      address: formData.address || {},
+      previous: formData.previous || {},
+      documents: formData.documents || {},
+      status: 'Submitted',
+      submittedAt: now,
+      updatedAt: now,
+      academicSession: getCurrentSession()
+    };
 
-  if (currentEditId) {
-    db.ref(ADMISSIONS_PATH + '/' + currentEditId).update(submissionData)
+    db.ref(ADMISSIONS_PATH + '/' + currentEditId).update(updateData)
       .then(function() {
+        // Update students node
         var item = allAdmissions.find(function(a) { return a.id === currentEditId; });
         if (item && item.studentId) {
           var studentData = {
-            studentId: item.studentId,
-            admissionId: currentEditId,
-            name: data.student.name,
-            class: data.student.class,
-            section: data.student.section,
-            rollNumber: item.rollNumber || '',
-            admissionNumber: item.admissionNumber || '',
-            status: 'Active',
+            name: s.name,
+            class: s.class,
+            section: s.section,
             updatedAt: now
           };
           db.ref(STUDENTS_PATH + '/' + item.studentId).update(studentData);
         }
-        window.closeModal();
+        window.location.hash = 'admission';
         window.showToast('Admission updated successfully.', 'success');
         loadAdmissions();
       })
@@ -1049,80 +1094,81 @@ function submitAdmission() {
     return;
   }
 
-  // New admission
-  getNextCounter('applicationCounter', 1).then(function(appCounter) {
-    var applicationNumber = generateApplicationNumber(appCounter);
+  // ---- New Admission ----
+  var year = getCurrentAcademicYear();
 
-    getNextCounter('admissionCounter', 1).then(function(admCounter) {
-      var admissionNumber = generateAdmissionNumber(admCounter);
+  // 1. Get Enrollment ID counter for this year
+  db.ref(ENROLLMENT_COUNTERS_PATH + '/' + year).transaction(function(current) {
+    return (current || 0) + 1;
+  }).then(function(result) {
+    if (!result.committed) {
+      window.showToast('Error generating Enrollment ID. Please try again.', 'error');
+      return;
+    }
+    var counter = result.snapshot.val();
+    var enrollmentId = generateEnrollmentId(year, counter);
 
-      var classVal = data.student.class || 'NA';
-      var sectionVal = data.student.section || 'NA';
-      var counterKey = getCounterKey(classVal, sectionVal);
+    // 2. Get Roll Number counter for class-section
+    var classVal = s.class || 'NA';
+    var sectionVal = s.section || 'NA';
+    var rollCounterKey = 'rollCounters/' + year + '/' + getCounterKey(classVal, sectionVal);
 
-      getNextCounter('rollCounters/' + counterKey, 1).then(function(rollCounter) {
-        var rollNumber = generateRollNumber(classVal, sectionVal, rollCounter);
+    db.ref(COUNTERS_PATH + '/' + rollCounterKey).transaction(function(current) {
+      return (current || 0) + 1;
+    }).then(function(rollResult) {
+      if (!rollResult.committed) {
+        window.showToast('Error generating Roll Number. Please try again.', 'error');
+        return;
+      }
+      var rollCounter = rollResult.snapshot.val();
+      var rollNumber = generateRollNumber(classVal, sectionVal, rollCounter);
 
-        var admissionId = db.ref(ADMISSIONS_PATH).push().key;
-        var studentId = db.ref(STUDENTS_PATH).push().key;
+      // 3. Create records
+      var admissionId = db.ref(ADMISSIONS_PATH).push().key;
+      var studentId = db.ref(STUDENTS_PATH).push().key;
 
-        var finalData = {
-          applicationNumber: applicationNumber,
-          admissionNumber: admissionNumber,
-          rollNumber: rollNumber,
-          studentId: studentId,
-          status: 'Submitted',
-          submittedAt: now,
-          createdAt: now,
-          updatedAt: now,
-          academicSession: getCurrentSession(),
-          admissionDate: data.student.admissionDate || new Date().toISOString().split('T')[0]
-        };
+      var finalData = {
+        student: formData.student || {},
+        parent: formData.parent || {},
+        address: formData.address || {},
+        previous: formData.previous || {},
+        documents: formData.documents || {},
+        enrollmentId: enrollmentId,
+        rollNumber: rollNumber,
+        studentId: studentId,
+        status: 'Submitted',
+        submittedAt: now,
+        createdAt: now,
+        updatedAt: now,
+        academicSession: getCurrentSession()
+      };
 
-        Object.assign(finalData, submissionData);
+      var studentRecord = {
+        studentId: studentId,
+        admissionId: admissionId,
+        enrollmentId: enrollmentId,
+        name: s.name,
+        class: s.class,
+        section: s.section,
+        rollNumber: rollNumber,
+        status: 'Active',
+        createdAt: now,
+        updatedAt: now
+      };
 
-        var updates = {};
-        updates[ADMISSIONS_PATH + '/' + admissionId] = finalData;
-        updates[STUDENTS_PATH + '/' + studentId] = {
-          studentId: studentId,
-          admissionId: admissionId,
-          name: data.student.name,
-          class: data.student.class,
-          section: data.student.section,
-          rollNumber: rollNumber,
-          admissionNumber: admissionNumber,
-          status: 'Active',
-          createdAt: now,
-          updatedAt: now
-        };
+      var updates = {};
+      updates[ADMISSIONS_PATH + '/' + admissionId] = finalData;
+      updates[STUDENTS_PATH + '/' + studentId] = studentRecord;
 
-        db.ref().update(updates)
-          .then(function() {
-            window.closeModal();
-            var successHtml = '' +
-              '<div style="text-align:center;padding:20px;">' +
-                '<div style="width:64px;height:64px;border-radius:50%;background:#e6f4ea;color:#28a745;display:grid;place-items:center;margin:0 auto 16px;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:32px;height:32px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>' +
-                '<h2 style="margin:0 0 4px;">Admission Successful</h2>' +
-                '<p style="margin:0 0 16px;color:#64748b;">The admission application has been submitted successfully.</p>' +
-                '<div style="background:#f8fafc;padding:16px;border-radius:5px;border:1px solid #e2e8f0;display:inline-block;text-align:left;">' +
-                  '<div><strong>Application Number:</strong> ' + applicationNumber + '</div>' +
-                  '<div><strong>Admission Number:</strong> ' + admissionNumber + '</div>' +
-                  '<div><strong>Roll Number:</strong> ' + rollNumber + '</div>' +
-                  '<div><strong>Student:</strong> ' + data.student.name + '</div>' +
-                  '<div><strong>Class:</strong> ' + data.student.class + (data.student.section && data.student.section !== 'NA' ? ' - ' + data.student.section : '') + '</div>' +
-                '</div>' +
-                '<div style="margin-top:16px;"><button class="btn btn-primary" onclick="window.closeModal();window.admissionModule.downloadPDF(\'' + admissionId + '\')">Download PDF Receipt</button></div>' +
-              '</div>';
-
-            window.openModal('Admission Confirmed', successHtml, '<button class="btn btn-outline" onclick="window.closeModal();location.reload();">Close</button>', false);
-
-            window.showToast('Admission completed for ' + data.student.name + '.', 'success');
-            loadAdmissions();
-          })
-          .catch(function(error) {
-            window.showToast('Error saving admission: ' + error.message, 'error');
-          });
-      });
+      db.ref().update(updates)
+        .then(function() {
+          window.location.hash = 'admission';
+          window.showToast('Admission completed successfully! Enrollment ID: ' + enrollmentId, 'success');
+          loadAdmissions();
+        })
+        .catch(function(error) {
+          window.showToast('Error saving admission: ' + error.message, 'error');
+        });
     });
   });
 }
@@ -1140,7 +1186,6 @@ function downloadPDF(id) {
   var a = item.address || {};
   var prv = item.previous || {};
   var docs = item.documents || {};
-
   var photoUrl = docs.photo ? docs.photo.url : '';
 
   var receiptDiv = document.createElement('div');
@@ -1153,7 +1198,7 @@ function downloadPDF(id) {
         '<div class="logo" style="width:52px;height:52px;background:#dc3545;color:#fff;border-radius:5px;display:grid;place-items:center;"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:28px;height:28px;"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg></div>' +
         '<div><div class="school-name" style="font-size:20px;font-weight:800;">Janaki Professional Academy</div><div class="school-meta" style="font-size:12px;color:#64748b;">ERP · Admission Receipt</div></div>' +
       '</div>' +
-      '<div class="receipt-tag"><h3 style="margin:0;font-size:15px;text-transform:uppercase;letter-spacing:0.08em;color:#dc3545;">Admission Confirmed</h3><div class="r-num" style="font-size:12.5px;color:#64748b;">' + (item.applicationNumber || 'N/A') + '</div></div>' +
+      '<div class="receipt-tag"><h3 style="margin:0;font-size:15px;text-transform:uppercase;letter-spacing:0.08em;color:#dc3545;">Admission Confirmed</h3><div class="r-num" style="font-size:12.5px;color:#64748b;">Enrollment: ' + (item.enrollmentId || 'N/A') + '</div></div>' +
     '</div>' +
     '<div style="display:flex;gap:16px;align-items:center;margin-bottom:16px;padding:12px;background:#f8fafc;border-radius:5px;border:1px solid #e2e8f0;">' +
       (photoUrl ? '<img src="' + photoUrl + '" style="width:60px;height:60px;border-radius:50%;object-fit:cover;border:2px solid #e2e8f0;" />' : '') +
@@ -1161,7 +1206,7 @@ function downloadPDF(id) {
     '</div>' +
     '<div class="receipt-section"><h4 style="margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:#64748b;">Admission Details</h4>' +
       '<div class="receipt-info-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px 24px;font-size:13px;">' +
-        '<div><span class="k" style="color:#64748b;min-width:120px;">Admission Number</span><span class="v" style="font-weight:600;">' + (item.admissionNumber || '—') + '</span></div>' +
+        '<div><span class="k" style="color:#64748b;min-width:120px;">Enrollment ID</span><span class="v" style="font-weight:600;">' + (item.enrollmentId || '—') + '</span></div>' +
         '<div><span class="k" style="color:#64748b;min-width:120px;">Roll Number</span><span class="v" style="font-weight:600;">' + (item.rollNumber || '—') + '</span></div>' +
         '<div><span class="k" style="color:#64748b;min-width:120px;">Academic Session</span><span class="v" style="font-weight:600;">' + (item.academicSession || 'N/A') + '</span></div>' +
         '<div><span class="k" style="color:#64748b;min-width:120px;">Date</span><span class="v" style="font-weight:600;">' + formatDate(s.admissionDate) + '</span></div>' +
@@ -1223,7 +1268,7 @@ function downloadPDF(id) {
     var pdfWidth = pdf.internal.pageSize.getWidth();
     var pdfHeight = (canvas.height * pdfWidth) / canvas.width;
     pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    pdf.save('Admission_' + (s.name || 'student') + '_' + (item.applicationNumber || '') + '.pdf');
+    pdf.save('Admission_' + (s.name || 'student') + '_' + (item.enrollmentId || '') + '.pdf');
     document.body.removeChild(receiptDiv);
   }).catch(function(error) {
     console.error('PDF generation error:', error);
@@ -1233,4 +1278,4 @@ function downloadPDF(id) {
 }
 
 // ---- Export ----
-export { render };
+export { render, renderForm };
